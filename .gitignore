@@ -1,0 +1,43 @@
+# Sentinel satellite image data
+sentinel_im/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large data files (satellite imagery)
+*.zip
+*.tiff
+*.tif
+*.jp2
+*.SAFE/
+
+# Credentials (if any)
+#*login*.py
+#credentials.txt
+.env

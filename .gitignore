@@ -1,5 +1,12 @@
 # Sentinel satellite image data
 sentinel_im/
+data/raw/
+data/processed/
+data/annotations/
+
+# Python virtual environment
+.venv/
+venv/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
@@ -40,4 +47,11 @@ Thumbs.db
 # Credentials (if any)
 #*login*.py
 #credentials.txt
-.env
+#.env
+
+# Private documentation (internal use only, do NOT commit)
+private_docs/
+
+
+# other files
+doc/

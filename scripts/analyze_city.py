@@ -46,6 +46,8 @@ import numpy as np
 import rasterio
 import matplotlib.pyplot as plt
 from datetime import datetime
+from tqdm import tqdm
+from tqdm import tqdm
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
@@ -535,7 +537,7 @@ Examples:
         """
     )
     
-    parser.add_argument('--city', type=str, required=True,
+    parser.add_argument('--city', type=str, required=False, default=None,
                        help='City name (e.g., Milan, Rome, Florence)')
     parser.add_argument('--radius', type=float, default=15,
                        help='Radius around city center in km (default: 15)')
@@ -545,6 +547,10 @@ Examples:
                        help='Force download fresh data (otherwise uses existing)')
     parser.add_argument('--data-dir', type=str, default=None,
                        help='Use existing data directory (e.g., data/processed/milano_centro)')
+    parser.add_argument('--demo', action='store_true',
+                       help='Run demo with sample data (no download needed)')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                       help='Verbose output with progress bars')
     
     args = parser.parse_args()
     
@@ -552,6 +558,46 @@ Examples:
     print("🛰️  SATELLITE CITY ANALYZER v1.0.0")
     print("=" * 70)
     
+    # Demo mode - use sample data
+    if args.demo:
+        print("\n🎮 DEMO MODE - Using sample data")
+        demo_dir = Path("data/demo/milan_sample")
+        if not (demo_dir / "bands" / "B02.tif").exists():
+            print("\n❌ Demo data not found!")
+            return 1
+        args.city = "Milan_Demo"
+        args.data_dir = str(demo_dir)
+        print(f"   Using: {demo_dir}")
+
+    # Check if --city was provided
+    if not args.demo and not args.city:
+        print("\n❌ Error: --city is required (or use --demo)")
+        print("\n   Examples:")
+        print("     python scripts/analyze_city.py --city Milan")
+        print("     python scripts/analyze_city.py --demo")
+        return 1
+
+
+    # Demo mode - use sample data
+    if args.demo:
+        print("\n🎮 DEMO MODE - Using sample data")
+        demo_dir = Path("data/demo/milan_sample")
+        if not (demo_dir / "bands" / "B02.tif").exists():
+            print("\n❌ Demo data not found!")
+            return 1
+        args.city = "Milan_Demo"
+        args.data_dir = str(demo_dir)
+        print(f"   Using: {demo_dir}")
+
+    # Check if --city was provided
+    if not args.demo and not args.city:
+        print("\n❌ Error: --city is required (or use --demo)")
+        print("\n   Examples:")
+        print("     python scripts/analyze_city.py --city Milan")
+        print("     python scripts/analyze_city.py --demo")
+        return 1
+
+
     # Initialize analyzer
     analyzer = CityAnalyzer(args.city, args.radius, use_existing_dir=args.data_dir)
     
@@ -572,11 +618,30 @@ Examples:
         # Re-check if data is now available
         has_data = analyzer.check_data_available()
         if not has_data:
-            print("\n❌ No data available after download attempt.")
-            print("   Please use manual workflow:")
-            print(f"   1. Download Sentinel-2 tile covering {args.city}")
-            print(f"   2. Extract bands to: {analyzer.base_dir / 'bands'}")
-            print(f"   3. Re-run: python scripts/analyze_city.py --city {args.city}")
+            print()
+            print("=" * 60)
+            print("❌ NO SATELLITE DATA FOUND")
+            print("=" * 60)
+            print()
+            print(f"Could not find Sentinel-2 bands for: {args.city}")
+            print(f"Expected location: {analyzer.base_dir / 'bands'}")
+            print()
+            print("🔧 SOLUTIONS:")
+            print()
+            print("   1. Try demo mode (no download needed):")
+            print("      python scripts/analyze_city.py --demo")
+            print()
+            print("   2. Download data from Copernicus:")
+            print("      a) Visit: https://browser.dataspace.copernicus.eu")
+            print(f"      b) Search for '{args.city}' area")
+            print("      c) Download Sentinel-2 L2A product")
+            print(f"      d) Extract: python scripts/extract_all_bands.py <zip> {analyzer.base_dir / 'bands'}")
+            print()
+            print("   3. Setup automatic download:")
+            print("      python scripts/setup.py")
+            print()
+            print("📚 Full guide: https://github.com/VTvito/sentinel2-land-cover#download-your-own-data")
+            print()
             return 1
     else:
         print(f"\n✅ Using existing data in: {analyzer.bands_dir}")

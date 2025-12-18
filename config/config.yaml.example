@@ -1,0 +1,34 @@
+# Sentinel Configuration
+# Copy this file to config.yaml and add your credentials
+
+sentinel:
+  # Get credentials from: https://dataspace.copernicus.eu/
+  # 1. Register/Login
+  # 2. Go to User Settings > OAuth clients
+  # 3. Create new client
+  client_id: "your_client_id_here"
+  client_secret: "your_client_secret_here"
+  
+  platformname: "Sentinel-2"
+  max_cloud_cover: 10.0
+
+# Area of Interest (defaults)
+area:
+  city: "Milan"
+  country: "Italy"
+  radius_km: 15.0
+
+# Band Configuration
+bands:
+  # 10m resolution bands (main)
+  selected_bands:
+    - "B02"  # Blue
+    - "B03"  # Green
+    - "B04"  # Red
+    - "B08"  # NIR
+
+# Output Configuration
+output:
+  save_preview: true
+  save_classification: true
+  save_confidence: true

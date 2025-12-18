@@ -86,12 +86,14 @@ python scripts/analyze_city.py --city Florence --radius 20 --method kmeans
 pip install streamlit
 streamlit run scripts/app.py
 ```
+Interactive dashboard with multi-city comparison.
 
 ### 📓 Jupyter Notebook
 
 ```bash
 jupyter notebook notebooks/city_analysis.ipynb
 ```
+Step-by-step tutorial.
 
 ---
 

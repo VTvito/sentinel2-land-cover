@@ -1,34 +1,44 @@
 # 🛰️ Satellite Analysis - Sentinel-2 Processing Pipeline
 
-Professional toolkit for Sentinel-2 satellite imagery: download, preprocessing with automatic cropping, and analysis.
+**Version 0.9.0** - Professional toolkit for Sentinel-2 satellite imagery analysis.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![UV Package Manager](https://img.shields.io/badge/uv-package%20manager-green.svg)](https://github.com/astral-sh/uv)
 
 ---
 
-## ✨ Key Features
+## 🚀 **Quick Start → [QUICKSTART.md](QUICKSTART.md)**
 
-### 🌍 **Area Selection**
-- Select by city name (geopy integration)
-- Select by coordinates (lat/lon + radius)
-- Automatic bbox generation (rectangle/circle)
+**Analyze any city in ONE command:**
 
-### 📥 **Download**
-- OAuth2 authentication with Copernicus Data Space
-- STAC catalog search by date, cloud cover, area
-- Progress bar for large downloads (~1.2 GB in 5 min)
+```bash
+python scripts/analyze_city.py --city Milan --method kmeans
+```
 
-### 🔧 **Preprocessing**
-- **Automatic Cropping** with CRS transformation ⭐
-- Band extraction (B02, B03, B04, B08)
-- RGB, False Color Composite (FCC), NDVI generation
-- 92.5% data reduction (10980² → 3007×2994 pixels for 15km area)
+**That's it!** Results in `data/cities/<city>/analysis/` 🎉
 
-### 🎨 **Visualization**
-- 3-panel display (RGB / FCC / NDVI)
-- Automatic save and open
-- Custom NDVI colormap
+See **[QUICKSTART.md](QUICKSTART.md)** for full getting-started guide (5 minutes).
+
+---
+
+## ✨ What This Does
+
+### 🎯 **One-Command Analysis**
+- **K-Means Clustering**: Automatic land cover classification (6 clusters)
+- **Spectral Indices**: Water, vegetation, urban, bare soil detection
+- **City Cropping**: Extract 15km radius around any city center
+- **Visualization**: Side-by-side RGB + classification results
+
+### 🔧 **Key Features**
+- 🌍 **Area Selection**: By city name or coordinates
+- 📥 **Smart Download**: Sentinel-2 tiles with cloud filtering
+- ⚡ **Performance**: 10x faster K-Means (memory optimized)
+- 🎨 **RGB True Color**: Natural-looking previews with histogram equalization
+
+### 📊 **Performance**
+- **Memory**: 25GB → 2GB RAM (chunked processing)
+- **Speed**: 5min → 40sec (smart sampling: train on 2M, predict on all)
+- **Space**: 92% reduction (10980² → 3000² pixels for cropped area)
 
 ---
 
@@ -37,66 +47,38 @@ Professional toolkit for Sentinel-2 satellite imagery: download, preprocessing w
 ### 1. Installation
 
 ```powershell
-# Install UV package manager
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
 # Clone repository
 git clone https://github.com/VTvito/satellite_git.git
 cd satellite_git
 
+# Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+
 # Install dependencies
-uv sync
+pip install -r requirements.txt
 ```
 
-### 2. Configuration
+### 2. Configure (optional for auto-download)
 
-Create `config/config.yaml`:
+Create `config/config.yaml` with your Sentinel Hub credentials:
 
 ```yaml
-copernicus:
+sentinel:
   client_id: "your_client_id"
   client_secret: "your_client_secret"
-  username: "your_username"
-  password: "your_password"
 ```
 
-### 3. Complete Workflow
+### 3. Run Analysis
 
-```python
-from satellite_analysis.utils import AreaSelector
-from satellite_analysis.downloaders import SentinelDownloader
-from satellite_analysis.pipelines import PreprocessingPipeline
+**See [QUICKSTART.md](QUICKSTART.md) for complete guide.**
 
-# 1. Select area
-selector = AreaSelector()
-bbox, info = selector.select_by_city("Milan", radius_km=15)
-print(f"Area: {info['area_km2']:.1f} km²")
+```bash
+# Analyze any city
+python scripts/analyze_city.py --city Milan --method kmeans
 
-# 2. Download Sentinel-2 product
-downloader = SentinelDownloader()
-products = downloader.search(
-    bbox=bbox,
-    date_start="2024-10-01",
-    date_end="2024-10-15",
-    max_cloud_cover=20
-)
-
-zip_file = downloader.download(
-    product_id=products[0]['id'],
-    output_dir="data/raw"
-)
-
-# 3. Preprocessing with automatic crop
-pipeline = PreprocessingPipeline()
-result = pipeline.run(
-    zip_path=str(zip_file),
-    bbox=bbox,  # Automatic crop to area!
-    save_visualization=True,
-    open_visualization=True
-)
-
-print(f"RGB: {result.rgb.shape}")
-print(f"NDVI range: [{result.metadata['ndvi_range'][0]:.3f}, {result.metadata['ndvi_range'][1]:.3f}]")
+# Or use manual workflow (if needed)
+python scripts/kmeans_milano_optimized.py
 ```
 
 ---
@@ -105,89 +87,141 @@ print(f"NDVI range: [{result.metadata['ndvi_range'][0]:.3f}, {result.metadata['n
 
 ```
 src/satellite_analysis/
-├── utils/              # Area selection, geocoding
-├── downloaders/        # Sentinel-2 download with OAuth2
-├── preprocessors/      # Band extraction, crop with CRS transform
+├── utils/              # AreaSelector, geocoding, visualization
+├── downloaders/        # Sentinel-2 download (OAuth2)
+├── preprocessors/      # Band extraction, cropping
+├── analyzers/          # Analysis algorithms ✨
+│   ├── classification/ # SpectralIndicesClassifier
+│   └── clustering/     # KMeans, KMeans++, Sklearn wrapper
+├── preprocessing/      # Normalization, reshaping
 ├── pipelines/          # High-level workflows
-└── config/             # Configuration management
+└── config/             # Settings management
+
+scripts/
+├── analyze_city.py             # 🎯 ONE-COMMAND analysis ✨ NEW
+├── crop_city_area.py           # City cropping utility
+├── kmeans_milano_optimized.py  # K-Means workflow
+└── test_classifier_milano.py   # Spectral classification
+```
+
+### Key Modules
+
+**Analyzers** (NEW in v0.9.0):
+- `KMeansClusterer` - Custom K-Means with chunked processing
+- `KMeansPlusPlusClusterer` - Smart initialization
+- `SklearnKMeansClusterer` - Sklearn wrapper for comparison
+- `SpectralIndicesClassifier` - Rule-based classification (NDVI, MNDWI, NDBI, BSI)
+
+**Preprocessing**:
+- `min_max_scale()` - Normalize bands to [0, 1]
+- `reshape_image_to_table()` - Convert (H,W,C) → (N, C) for ML
+- `reshape_table_to_image()` - Convert back to (H,W) for visualization
+
+---
+
+## 🧪 Development
+
+### Run Tests
+
+```bash
+# Area selection tests
+python tests/test_area_selection.py
+
+# Preprocessing tests
+python tests/test_preprocessing_pipeline.py
+
+# Complete workflow
+python tests/test_complete_workflow.py
+```
+
+### Code Structure
+
+```python
+# Example: Custom analysis pipeline
+from satellite_analysis.utils import AreaSelector
+from satellite_analysis.analyzers.clustering import KMeansPlusPlusClusterer
+from satellite_analysis.preprocessing import min_max_scale, reshape_image_to_table
+
+# 1. Select area
+selector = AreaSelector()
+bbox, info = selector.select_by_city("Milan", radius_km=15)
+
+# 2. Load bands (manual or with pipeline)
+# ... load B02, B03, B04, B08 ...
+
+# 3. Prepare data
+data = reshape_image_to_table(stack)  # (H*W, 4)
+data_scaled = min_max_scale(data)
+
+# 4. Cluster
+clusterer = KMeansPlusPlusClusterer(n_clusters=6)
+clusterer.fit(data_scaled)
+labels = clusterer.predict(data_scaled)
 ```
 
 ---
 
-## 🧪 Testing
+## � Performance Benchmarks
 
-```powershell
-# Test area selection
-uv run python tests/test_area_selection.py
+| Operation | Time | Memory | Notes |
+|-----------|------|--------|-------|
+| Download (1.2GB) | ~5 min | - | Sentinel-2 tile |
+| Crop to city | ~30s | <1GB | 92% reduction |
+| K-Means (full tile) | 5+ min | 25GB | 120M pixels → OOM |
+| **K-Means (cropped)** | **40s** | **2GB** | **10x faster** ✨ |
+| Spectral classification | <10s | <1GB | Rule-based |
 
-# Test preprocessing with crop
-uv run python tests/test_preprocessing_pipeline.py
-
-# Test complete workflow (download + preprocessing)
-uv run python tests/test_complete_workflow.py
-```
-
----
-
-## 📈 Performance
-
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Geocoding | <1s | geopy API |
-| Product search | 2-3s | STAC catalog |
-| Download 1.2GB | 5 min | 4 MB/s bandwidth |
-| Preprocessing (crop) | 30s | Includes NDVI |
-| **Data reduction** | **92.5%** | 10980² → 3007×2994 px |
-
----
-
-## 🔧 Advanced: Automatic Cropping
-
-The preprocessing pipeline includes **automatic cropping with CRS transformation**:
-
-1. Input bbox in WGS84 (EPSG:4326) - standard geographic coordinates
-2. Auto-detect raster CRS (typically UTM 32N - EPSG:32632)
-3. Transform bbox to raster CRS using `rasterio.warp.transform_geom`
-4. Crop with `rasterio.mask` and shapely polygon
-5. Output: only requested area, preserving quality
-
-**Before crop**: 110 km × 110 km tile (10980 × 10980 pixels = 1.2 GB)  
-**After crop**: 30 km × 30 km area (3007 × 2994 pixels = 35 MB)  
-**Benefit**: Faster processing, lower memory, focused output
+**Optimization Highlights**:
+- ✅ Chunked distance calculation (10K samples/chunk) → No OOM
+- ✅ Smart sampling (train 2M, predict all) → 10x speedup
+- ✅ City cropping (92% reduction) → Focused analysis
 
 ---
 
 ## 📝 Documentation
 
-- `ARCHITECTURE.md` - System design and module structure
-- `PREPROCESSING_REPORT.md` - Preprocessing pipeline details
-- `AREA_SELECTION_REPORT.md` - Area selection and geocoding
+**For Users**:
+- **[QUICKSTART.md](QUICKSTART.md)** - 5-minute getting started guide ⭐
+- `ARCHITECTURE.md` - System design
+- `PREPROCESSING_REPORT.md` - Pipeline details
+- `AREA_SELECTION_REPORT.md` - Area selection guide
+
+**For Developers**:
+- `private_docs/GAP_ANALYSIS.md` - Feature roadmap
+- Code docstrings - Full API documentation
 
 ---
 
-## 🛠️ Dependencies
+## 🛠️ Key Dependencies
 
 - **rasterio** (1.3.9): Geospatial raster I/O
+- **numpy** (1.26.0): Numerical computing
+- **scikit-learn** (1.3.0): Machine learning algorithms
+- **matplotlib** (3.8.0): Visualization
 - **shapely** (2.0.2): Geometric operations
 - **geopy** (2.4.0): Geocoding
-- **matplotlib** (3.8.0): Visualization
-- **requests-oauthlib**: OAuth2 authentication
 
 ---
 
 ## 📜 License
 
-MIT License - See LICENSE file for details
+MIT License - See LICENSE file
 
 ---
 
-## 👥 Contributing
+## � Roadmap
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+**v0.9.0** (Current) - K-Means Clustering ✅
+- Custom K-Means with memory optimization
+- City cropping methodology
+- One-command analysis script
+
+**v1.0.0** (Next) - Consensus Logic
+- Multi-method consensus classification
+- Confidence scores
+- Enhanced visualization
+
+See `private_docs/GAP_ANALYSIS.md` for detailed roadmap.
 
 ---
 
@@ -197,7 +231,7 @@ Found a bug? Have a feature request? Please open an issue on GitHub.
 
 ---
 
-**Version**: 0.3.0  
+**Version**: 0.9.0 - **K-Means Clustering Release** ✨  
 **Last Updated**: October 15, 2025
 
 ```bash
@@ -213,112 +247,4 @@ uv pip install -e .
 ### Configure OAuth2
 Register at [Copernicus Data Space](https://dataspace.copernicus.eu/) and edit `config/config.yaml`:
 ```yaml
-auth:
-  client_id: "your_client_id"
-  client_secret: "your_client_secret"
-```
-
-### Download Example
-```python
-from satellite_analysis.utils import AreaSelector
-from satellite_analysis.pipelines import DownloadPipeline
-
-# Select area by city name (automatic coordinates!)
-selector = AreaSelector()
-bbox, metadata = selector.select_by_city("Milan", radius_km=15)
-
-print(f"Area: {metadata['area_km2']:.1f} km² centered on Milan")
-
-# Download
-pipeline = DownloadPipeline.from_config("config/config.yaml")
-result = pipeline.run(
-    bbox=bbox,  # Use correct coordinates!
-    start_date="2023-03-01",
-    end_date="2023-03-15",
-    max_cloud_cover=20
-)
-
-print(f"Downloaded {result.downloaded_count} products")
-# Files saved in: data/raw/product_*.zip
-# Previews saved in: data/previews/product_*_preview.png
-```
-
-### Preprocessing Example
-```python
-from satellite_analysis.pipelines import PreprocessingPipeline
-
-pipeline = PreprocessingPipeline(
-    bands=['B02', 'B03', 'B04', 'B08'],  # RGB + NIR
-    resolution="10m"
-)
-
-result = pipeline.run("data/raw/product_1.zip")
-
-# Access processed data
-rgb_image = result.rgb          # RGB composite (uint8)
-fcc_image = result.fcc          # False Color Composite
-ndvi_map = result.ndvi          # Vegetation index
-bands = result.band_data        # Raw band data (uint16)
-```
-```
-
-## Architecture
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design.
-
-### 3 Usage Levels
-
-1. **Simple** (Notebooks): High-level pipelines for interactive analysis
-2. **Modular** (Scripts): Individual components for custom workflows
-3. **Advanced** (Extensions): Implement custom strategies (Auth, Clustering, Classification)
-
-### Key Components
-
-- `downloaders/`: OAuth2 auth + STAC catalog + product download
-- `preprocessors/`: Band extraction (TODO)
-- `analyzers/`: KMeans++ clustering, classification (TODO)
-- `pipelines/`: High-level orchestration
-- `utils/`: Geospatial + visualization helpers
-
-## Status
-
-✅ **Implemented**: OAuth2 auth, catalog search, product download (tested with 1.15 GB file), band extraction, RGB/FCC/NDVI composites, KMeans++  
-🔜 **TODO**: Classification (Random Forest, SVM)
-
-## Performance Notes
-
-### Download Speed ⚠️
-
-Downloading Sentinel-2 data is **intentionally slow** (~1.2 GB per product, ~160 minutes at 1 Mbps):
-
-- **Why?** Copernicus Data Space provides full tiles (~110 km × 110 km), not area subsets
-- **Your area (15 km)** is only ~7% of the tile, but you download 100%
-- **Inevitable**: Free API doesn't support spatial cropping during download
-
-**Solutions**:
-1. **Use CroppingDownloader** (saves 97% disk space after download):
-   ```python
-   from satellite_analysis.downloaders import CroppingDownloader
-   # Downloads 1.2 GB, saves only 35 MB on disk
-   ```
-
-2. **Sentinel Hub API** (€0.01-0.05 per request, 120x faster):
-   - Downloads only requested area (~10 MB vs 1.2 GB)
-   - Time: ~1 minute vs 160 minutes
-
-3. **Google Earth Engine** (free with quotas):
-   - Cloud processing + area cropping
-   - Ideal for research projects
-
-📖 See [doc/DOWNLOAD_SPEED_EXPLANATION.md](doc/DOWNLOAD_SPEED_EXPLANATION.md) for details.
-
-## Troubleshooting
-
-- **OAuth2 failed**: Check credentials in `config/config.yaml`
-- **No products found**: Increase `max_cloud_cover` or extend date range
-- **Download failed**: Refresh token with `auth.refresh()`
-- **Wrong area downloaded**: The catalog now filters tiles that contain the center point of your bbox (fixed!)
-
-## License
-
-MIT License
+**Made with ❤️ for satellite imagery analysis**

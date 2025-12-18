@@ -2,7 +2,17 @@
 sentinel_im/
 data/raw/
 data/processed/
+data/processed_final/
 data/annotations/
+data/previews/
+
+# Clustering output files (temporary/analysis results)
+**/clustering/
+*.npy
+*_labels*.png
+*_comparison.png
+*_result.png
+elbow_curve.png
 
 # Python virtual environment
 .venv/

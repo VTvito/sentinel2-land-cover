@@ -1,123 +1,112 @@
 """
-Test workflow completo: Download → Preprocessing → Visualizzazione
+Test workflow components without actual downloads.
+Tests area selection, classification, and validation locally.
 """
 
 import sys
 from pathlib import Path
+import numpy as np
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from satellite_analysis.utils import AreaSelector
-from satellite_analysis.downloaders import SentinelDownloader
-from satellite_analysis.pipelines import PreprocessingPipeline
 
-
-def test_complete_workflow():
-    """Test workflow completo end-to-end."""
-    print("\n" + "=" * 70)
-    print("🧪 TEST WORKFLOW COMPLETO")
-    print("=" * 70)
-    
-    # 1. Selezione area
-    print("\n📍 STEP 1: Selezione area")
-    print("-" * 70)
+def test_area_selector():
+    """Test AreaSelector city lookup."""
+    from satellite_analysis.utils import AreaSelector
     
     selector = AreaSelector()
     bbox, area_info = selector.select_by_city("Milan", radius_km=15)
     
-    print(f"Città: Milan")
-    print(f"Centro: {area_info['center'][0]:.4f}°N, {area_info['center'][1]:.4f}°E")
-    print(f"BBox: [{bbox[0]:.4f}, {bbox[1]:.4f}, {bbox[2]:.4f}, {bbox[3]:.4f}]")
-    print(f"Superficie: {area_info['area_km2']:.1f} km²")
+    assert bbox is not None
+    assert len(bbox) == 4
+    assert area_info['center'][0] > 45  # Milan latitude
+    assert area_info['center'][1] > 9   # Milan longitude
     
-    # 2. Download prodotto
-    print("\n📥 STEP 2: Download prodotto Sentinel-2")
-    print("-" * 70)
+    print("✅ AreaSelector works")
+
+
+def test_consensus_classifier():
+    """Test ConsensusClassifier on synthetic data."""
+    from satellite_analysis.analyzers.classification import ConsensusClassifier
     
-    downloader = SentinelDownloader()
+    # Create synthetic 4-band satellite data
+    np.random.seed(42)
+    h, w = 100, 100
     
-    # Cerca prodotti disponibili
-    products = downloader.search(
-        bbox=bbox,
-        date_start="2024-10-01",
-        date_end="2024-10-15",
-        max_cloud_cover=20
-    )
+    # Simulate bands: B02 (blue), B03 (green), B04 (red), B08 (NIR)
+    stack = np.random.randint(0, 4000, (h, w, 4), dtype=np.uint16).astype(np.float32)
     
-    if not products:
-        print("❌ Nessun prodotto trovato per i criteri specificati")
-        return False
+    # Add some structure: water in corner (low reflectance)
+    stack[:20, :20, :] = np.random.randint(100, 500, (20, 20, 4))
     
-    print(f"✓ Trovati {len(products)} prodotti")
+    # Vegetation patch (high NIR)
+    stack[50:70, 50:70, 3] = np.random.randint(3000, 4000, (20, 20))
     
-    # Scarica il primo prodotto
-    product = products[0]
-    print(f"\nProdotto selezionato:")
-    print(f"  ID: {product['id'][:50]}...")
-    print(f"  Data: {product['date']}")
-    print(f"  Cloud cover: {product['cloud_cover']:.1f}%")
-    print(f"  Dimensione: {product['size_mb']:.1f} MB")
+    classifier = ConsensusClassifier(n_clusters=6)
+    band_indices = {'B02': 0, 'B03': 1, 'B04': 2, 'B08': 3}
+    labels, confidence, uncertainty, stats = classifier.classify(stack, band_indices)
     
-    output_file = downloader.download(
-        product_id=product['id'],
-        output_dir="data/raw"
-    )
+    assert labels.shape == (h, w)
+    assert confidence.shape == (h, w)
+    assert labels.min() >= 0
+    assert labels.max() <= 5
+    assert confidence.min() >= 0
+    assert confidence.max() <= 1
     
-    print(f"✓ Download completato: {output_file.name}")
+    print(f"✅ ConsensusClassifier works (found {len(np.unique(labels))} classes)")
+
+
+def test_validation_metrics():
+    """Test validation metrics computation."""
+    from satellite_analysis.validation import compute_accuracy, compute_kappa, compute_f1_scores
     
-    # 3. Preprocessing
-    print("\n🔧 STEP 3: Preprocessing con crop automatico")
-    print("-" * 70)
+    # Create synthetic predictions
+    np.random.seed(42)
+    y_true = np.random.randint(0, 6, 1000)
+    y_pred = y_true.copy()
     
-    pipeline = PreprocessingPipeline(output_dir="data/processed")
-    result = pipeline.run(
-        zip_path=str(output_file),
-        bbox=bbox,
-        save_visualization=True,
-        open_visualization=True
-    )
+    # Add 20% noise
+    noise_mask = np.random.random(1000) < 0.2
+    y_pred[noise_mask] = np.random.randint(0, 6, noise_mask.sum())
     
-    # 4. Risultati
-    print("\n📊 STEP 4: Risultati")
-    print("-" * 70)
+    accuracy = compute_accuracy(y_true, y_pred)
+    kappa = compute_kappa(y_true, y_pred)
+    f1_score = compute_f1_scores(y_true, y_pred)  # Weighted F1 score
     
-    print(f"\n✅ Preprocessing completato:")
-    print(f"   Prodotto: {result.product_name}")
-    print(f"   Bande estratte: {len(result.bands)}")
-    print(f"   Cropped: {result.metadata['cropped']}")
+    assert 0.7 < accuracy < 0.9  # Should be around 80%
+    assert 0.5 < kappa < 0.9     # Good but not perfect agreement
+    assert 0.7 < f1_score < 0.9  # Weighted F1 similar to accuracy
     
-    print(f"\n🎨 Composites:")
-    print(f"   RGB: {result.rgb.shape[1]:,} × {result.rgb.shape[0]:,} pixels")
-    print(f"   FCC: {result.fcc.shape[1]:,} × {result.fcc.shape[0]:,} pixels")
-    print(f"   NDVI: {result.ndvi.shape[1]:,} × {result.ndvi.shape[0]:,} pixels")
-    print(f"   NDVI range: [{result.metadata['ndvi_range'][0]:.3f}, {result.metadata['ndvi_range'][1]:.3f}]")
+    print(f"✅ Validation metrics work (accuracy={accuracy:.2%}, kappa={kappa:.3f})")
+
+
+def test_preprocessing():
+    """Test preprocessing utilities."""
+    from satellite_analysis.preprocessing import min_max_scale, reshape_image_to_table
     
-    if result.visualization_path:
-        viz_size = result.visualization_path.stat().st_size / (1024 * 1024)
-        print(f"\n🖼️  Visualizzazione: {viz_size:.2f} MB")
-        print(f"   Path: {result.visualization_path}")
+    # Test min-max scaling
+    data = np.array([[0, 100], [50, 200]], dtype=np.float32)
+    scaled = min_max_scale(data)
     
-    print("\n" + "=" * 70)
-    print("✅ WORKFLOW COMPLETATO CON SUCCESSO")
-    print("=" * 70)
+    assert scaled.min() == 0.0
+    assert scaled.max() == 1.0
     
-    print("\n💡 Output generati:")
-    print(f"   • Prodotto raw: data/raw/{output_file.name}")
-    print(f"   • Bande processate: data/processed/{result.product_name}/")
-    print(f"   • Visualizzazione: {result.visualization_path}")
+    # Test reshape
+    image = np.random.rand(10, 10, 4)
+    table = reshape_image_to_table(image)
     
-    return True
+    assert table.shape == (100, 4)
+    
+    print("✅ Preprocessing utilities work")
 
 
 if __name__ == "__main__":
-    print("\n🚀 TEST SUITE: Complete Workflow\n")
+    print("\n🧪 Running component tests...\n")
     
-    success = test_complete_workflow()
+    test_area_selector()
+    test_preprocessing()
+    test_consensus_classifier()
+    test_validation_metrics()
     
-    if not success:
-        print("\n❌ Workflow fallito")
-        sys.exit(1)
-    
-    print("\n🎉 Tutti i componenti validati!")
-    print("\n📝 Il sistema è pronto per l'uso in produzione.\n")
+    print("\n✅ All component tests passed!\n")

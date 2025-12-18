@@ -41,13 +41,16 @@ class KMeansPlusPlusClusterer(ClusteringStrategy):
         
         # Choose remaining centroids based on distance
         for _ in range(self.n_clusters - 1):
-            # Calculate distances to nearest centroid
-            distances = np.linalg.norm(data[:, np.newaxis] - centroids, axis=-1)
-            min_distances = np.min(distances, axis=-1)
+            # Calculate distances to nearest centroid (memory-efficient)
+            min_distances = np.full(data.shape[0], np.inf, dtype=np.float32)
+            
+            for centroid in centroids:
+                diff = data - centroid
+                distances = np.sum(diff ** 2, axis=1)
+                min_distances = np.minimum(min_distances, distances)
             
             # Choose next centroid with probability proportional to distance squared
-            probabilities = min_distances ** 2
-            probabilities /= np.sum(probabilities)
+            probabilities = min_distances / np.sum(min_distances)
             
             new_centroid_idx = rng.choice(range(data.shape[0]), p=probabilities)
             centroids.append(data[new_centroid_idx])
@@ -68,19 +71,25 @@ class KMeansPlusPlusClusterer(ClusteringStrategy):
         
         # Iterate until convergence or max iterations
         for iteration in range(self.max_iterations):
-            # Assign points to nearest centroid
-            distances = np.linalg.norm(data[:, np.newaxis] - self.centroids_, axis=-1)
+            # Assign points to nearest centroid (memory-efficient)
+            distances = np.zeros((data.shape[0], self.n_clusters), dtype=np.float32)
+            for k in range(self.n_clusters):
+                diff = data - self.centroids_[k]
+                distances[:, k] = np.sum(diff ** 2, axis=1)
+            
             self.labels_ = np.argmin(distances, axis=-1)
             
-            # Update centroids
-            new_centroids = np.array([
-                data[self.labels_ == i].mean(axis=0) if np.any(self.labels_ == i)
-                else self.centroids_[i]
-                for i in range(self.n_clusters)
-            ])
+            # Update centroids (vectorized)
+            new_centroids = np.zeros_like(self.centroids_)
+            for k in range(self.n_clusters):
+                mask = self.labels_ == k
+                if np.any(mask):
+                    new_centroids[k] = data[mask].mean(axis=0)
+                else:
+                    new_centroids[k] = self.centroids_[k]
             
             # Check convergence
-            if np.allclose(self.centroids_, new_centroids):
+            if np.allclose(self.centroids_, new_centroids, rtol=1e-4):
                 print(f"Converged after {iteration + 1} iterations")
                 break
             

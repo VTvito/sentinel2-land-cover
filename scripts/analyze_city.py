@@ -47,7 +47,6 @@ import rasterio
 import matplotlib.pyplot as plt
 from datetime import datetime
 from tqdm import tqdm
-from tqdm import tqdm
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))

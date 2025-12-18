@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2025-12-18 - Demo Mode & Improved UX 🎯
+
+### Added
+
+#### 🎮 Demo Mode (NEW)
+- **`--demo` flag** for instant testing without satellite data
+  - Sample GeoTIFF bands included in `data/demo/milan_sample/`
+  - Run `python scripts/analyze_city.py --demo` to try immediately
+  - No Copernicus credentials required
+
+#### 🧙 Setup Wizard (NEW)
+- **`scripts/setup.py`** interactive configuration wizard
+  - Dependency checking
+  - Copernicus credentials configuration
+  - First-time user onboarding
+
+#### 📖 Quick Start Guide (NEW)
+- **`QUICKSTART.md`** - 2-minute getting started guide
+  - Demo mode instructions
+  - Common commands reference table
+
+### Changed
+
+#### 🎨 UX Improvements
+- `-v/--verbose` flag for progress output with tqdm
+- `--city` now optional when using `--demo` mode
+- Improved error messages with actionable suggestions
+
+---
+
+## [1.0.1] - 2025-12-18 - Bug Fixes 🐛
+
+### Fixed
+- Notebook using deprecated `fit_predict()` instead of `classify()`
+- Spectral method failing without SWIR bands (now uses simplified RGB+NIR)
+- CLI encoding issues on Windows
+
+### Added
+- **OutputManager** for timestamped, organized results storage
+- Results now saved to `runs/<timestamp>_<method>/` with metadata
+- `run_info.json` with parameters, duration, and statistics
+- `latest/` folder pointing to most recent run
+
+### Changed
+- Updated README with new output structure
+
+### Testing
+- Added comprehensive `test_user_workflows.py` (20 new tests)
+- All 31 tests now passing
+
+---
+
 ## [1.0.0] - 2025-12-18 - Production Release 🚀
 
 ### 🎉 First Stable Release!

@@ -1,7 +1,7 @@
 # 🤖 AI Agent Instructions - Satellite Analysis Project
 
 **Project**: Sentinel-2 Satellite Imagery Analysis Toolkit  
-**Version**: 1.0.0 (Production Release)  
+**Version**: 1.1.0 (Demo Mode & Improved UX)  
 **Last Updated**: December 18, 2025  
 **Status**: Production Ready
 
@@ -22,7 +22,7 @@ Professional toolkit for **Sentinel-2 satellite imagery analysis** with:
 
 ---
 
-## 🎯 Current Status (v1.0.0)
+## 🎯 Current Status (v1.1.0)
 
 ### ✅ Completed Features
 
@@ -34,8 +34,10 @@ Professional toolkit for **Sentinel-2 satellite imagery analysis** with:
 | Validation Suite | ✅ Done | `validation/` |
 | Web UI (Streamlit) | ✅ Done | `scripts/app.py` |
 | Jupyter Notebooks | ✅ Done | `notebooks/` |
+| Demo Mode | ✅ Done | `--demo` flag, sample data |
+| Setup Wizard | ✅ Done | `scripts/setup.py` |
 
-### 🔴 Pending (v1.1.0 Roadmap)
+### 🔴 Pending (v1.2.0 Roadmap)
 
 - ❌ Batch processing for multiple cities
 - ❌ PDF report generation
@@ -51,6 +53,7 @@ satellite_git/
 ├── scripts/                    # Entry points
 │   ├── analyze_city.py         # 🎯 Main CLI (one-command)
 │   ├── app.py                  # 🌐 Web UI (Streamlit)
+│   ├── setup.py                # 🧙 Setup wizard
 │   ├── validate_classification.py  # Validation tool
 │   ├── crop_city_area.py       # Crop utility
 │   ├── download_products.py    # Download utility
@@ -81,8 +84,7 @@ satellite_git/
 ### Key Entry Points
 
 | Use Case | Command |
-|----------|---------|
-| CLI Analysis | `python scripts/analyze_city.py --city Milan --method consensus` |
+|----------|---------|| Demo (No Data) | `python scripts/analyze_city.py --demo` || CLI Analysis | `python scripts/analyze_city.py --city Milan --method consensus` |
 | Web Interface | `streamlit run scripts/app.py` |
 | Validation | `python scripts/validate_classification.py --city Milan --report` |
 | Jupyter | `jupyter notebook notebooks/city_analysis.ipynb` |

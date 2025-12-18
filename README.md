@@ -1,6 +1,12 @@
 # 🛰️ Satellite City Analyzer
 
-**Classify land cover from satellite imagery in one command.**
+[![CI](https://github.com/VTvito/satellite_git/actions/workflows/ci.yml/badge.svg)](https://github.com/VTvito/satellite_git/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Classify land cover from Sentinel-2 satellite imagery in one command.**
+
+> 🔄 **Looking for a sentinelsat alternative?** This toolkit works with the new [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/) API after the [deprecation of the old Copernicus Open Access Hub](https://github.com/sentinelsat/sentinelsat/issues/607).
 
 Analyze any city using Sentinel-2 data: detect water, vegetation, urban areas, and more.
 
@@ -184,6 +190,38 @@ satellite_git/
 - ~1GB disk per city
 
 **Dependencies:** numpy, rasterio, scikit-learn, matplotlib
+
+---
+
+## Why This Project?
+
+In October 2023, the **Copernicus Open Access Hub was retired**, breaking the widely-used `sentinelsat` library ([see discussion](https://github.com/sentinelsat/sentinelsat/issues/607)). Thousands of researchers and developers lost their workflows overnight.
+
+This toolkit was built to:
+1. ✅ Work with the **new Copernicus Data Space Ecosystem API**
+2. ✅ Provide **one-command analysis** (no manual band stacking)
+3. ✅ Include **validation metrics** (accuracy, kappa, F1-score)
+4. ✅ Offer multiple interfaces (CLI, Web UI, Jupyter)
+
+### Migration from Sentinelsat
+
+| Old (sentinelsat) | New (this toolkit) |
+|-------------------|-------------------|
+| `api.query()` | `python scripts/download_products.py --city Milan` |
+| Manual band extraction | Automatic with `extract_all_bands.py` |
+| No classification | Built-in Consensus Classifier |
+| No validation | Full validation suite |
+
+---
+
+## Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 

@@ -42,19 +42,28 @@ class KMeansClusterer(ClusteringStrategy):
         
         # Iterate until convergence or max iterations
         for iteration in range(self.max_iterations):
-            # Assign points to nearest centroid
-            distances = np.linalg.norm(data[:, np.newaxis] - self.centroids_, axis=-1)
+            # Assign points to nearest centroid (optimized for memory)
+            # Instead of creating huge (n_samples, n_clusters, n_features) array,
+            # compute distances iteratively per centroid
+            distances = np.zeros((data.shape[0], self.n_clusters), dtype=np.float32)
+            for k in range(self.n_clusters):
+                # Compute squared distance to centroid k (faster than norm)
+                diff = data - self.centroids_[k]
+                distances[:, k] = np.sum(diff ** 2, axis=1)
+            
             self.labels_ = np.argmin(distances, axis=-1)
             
-            # Update centroids
-            new_centroids = np.array([
-                data[self.labels_ == i].mean(axis=0) if np.any(self.labels_ == i) 
-                else self.centroids_[i]
-                for i in range(self.n_clusters)
-            ])
+            # Update centroids (vectorized)
+            new_centroids = np.zeros_like(self.centroids_)
+            for k in range(self.n_clusters):
+                mask = self.labels_ == k
+                if np.any(mask):
+                    new_centroids[k] = data[mask].mean(axis=0)
+                else:
+                    new_centroids[k] = self.centroids_[k]
             
             # Check convergence
-            if np.allclose(self.centroids_, new_centroids):
+            if np.allclose(self.centroids_, new_centroids, rtol=1e-4):
                 print(f"Converged after {iteration + 1} iterations")
                 break
             

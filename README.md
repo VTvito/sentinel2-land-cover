@@ -1,6 +1,6 @@
 # 🛰️ Satellite Analysis - Sentinel-2 Processing Pipeline
 
-**Version 0.9.0** - Professional toolkit for Sentinel-2 satellite imagery analysis.
+**Version 1.0.0** - Professional toolkit for Sentinel-2 satellite imagery analysis.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![UV Package Manager](https://img.shields.io/badge/uv-package%20manager-green.svg)](https://github.com/astral-sh/uv)
@@ -12,6 +12,10 @@
 **Analyze any city in ONE command:**
 
 ```bash
+# Recommended: Consensus classification (K-Means + Spectral combined)
+python scripts/analyze_city.py --city Milan --method consensus
+
+# Or K-Means only
 python scripts/analyze_city.py --city Milan --method kmeans
 ```
 
@@ -21,23 +25,41 @@ See **[QUICKSTART.md](QUICKSTART.md)** for full getting-started guide (5 minutes
 
 ---
 
+## ✨ What's New in v1.0.0
+
+### 🔮 **Consensus Classification** (NEW!)
+- Combines K-Means clustering + Spectral indices for robust results
+- **Confidence scoring**: Know how reliable each pixel classification is
+- **Uncertainty flagging**: Automatically identify ambiguous areas
+- **Automatic mapping**: Learns cluster-to-class relationships
+
+### 🔍 **Validation Suite** (NEW!)
+- Compare classifications against ESA Scene Classification Layer (SCL)
+- Full metrics: Overall Accuracy, Kappa, F1-score (per-class and weighted)
+- Confusion matrix visualization
+- Comprehensive validation reports
+
+---
+
 ## ✨ What This Does
 
 ### 🎯 **One-Command Analysis**
+- **Consensus Classification**: Best of K-Means + Spectral (recommended)
 - **K-Means Clustering**: Automatic land cover classification (6 clusters)
 - **Spectral Indices**: Water, vegetation, urban, bare soil detection
 - **City Cropping**: Extract 15km radius around any city center
-- **Visualization**: Side-by-side RGB + classification results
+- **Visualization**: Multi-panel comparison + confidence maps
 
 ### 🔧 **Key Features**
 - 🌍 **Area Selection**: By city name or coordinates
 - 📥 **Smart Download**: Sentinel-2 tiles with cloud filtering
 - ⚡ **Performance**: 10x faster K-Means (memory optimized)
 - 🎨 **RGB True Color**: Natural-looking previews with histogram equalization
+- 📊 **Validation**: Compare against ESA reference data
 
 ### 📊 **Performance**
 - **Memory**: 25GB → 2GB RAM (chunked processing)
-- **Speed**: 5min → 40sec (smart sampling: train on 2M, predict on all)
+- **Speed**: 5min → 45sec (smart sampling: train on 2M, predict on all)
 - **Space**: 92% reduction (10980² → 3000² pixels for cropped area)
 
 ---
@@ -98,19 +120,33 @@ src/satellite_analysis/
 └── config/             # Settings management
 
 scripts/
-├── analyze_city.py             # 🎯 ONE-COMMAND analysis ✨ NEW
+├── analyze_city.py             # 🎯 ONE-COMMAND analysis (consensus default)
+├── app.py                      # 🌐 Web UI (Streamlit)
+├── validate_classification.py  # 🔍 Validation suite (NEW v1.0.0)
 ├── crop_city_area.py           # City cropping utility
 ├── kmeans_milano_optimized.py  # K-Means workflow
 └── test_classifier_milano.py   # Spectral classification
+
+notebooks/
+├── city_analysis.ipynb         # 📓 Complete analysis workflow
+├── clustering_example.ipynb    # K-Means tutorial
+└── download_example.ipynb      # Download API example
 ```
 
 ### Key Modules
 
-**Analyzers** (NEW in v0.9.0):
+**Analyzers**:
+- `ConsensusClassifier` - **NEW** Combined K-Means + Spectral with confidence
 - `KMeansClusterer` - Custom K-Means with chunked processing
 - `KMeansPlusPlusClusterer` - Smart initialization
 - `SklearnKMeansClusterer` - Sklearn wrapper for comparison
 - `SpectralIndicesClassifier` - Rule-based classification (NDVI, MNDWI, NDBI, BSI)
+
+**Validation** (NEW in v1.0.0):
+- `ValidationReport` - Comprehensive accuracy assessment
+- `compute_accuracy()`, `compute_kappa()`, `compute_f1_scores()` - Metrics
+- `plot_confusion_matrix()` - Visualization
+- `SCLValidator` - Compare against ESA Scene Classification Layer
 
 **Preprocessing**:
 - `min_max_scale()` - Normalize bands to [0, 1]
@@ -140,7 +176,9 @@ python tests/test_complete_workflow.py
 # Example: Custom analysis pipeline
 from satellite_analysis.utils import AreaSelector
 from satellite_analysis.analyzers.clustering import KMeansPlusPlusClusterer
+from satellite_analysis.analyzers.classification import ConsensusClassifier
 from satellite_analysis.preprocessing import min_max_scale, reshape_image_to_table
+from satellite_analysis.validation import ValidationReport
 
 # 1. Select area
 selector = AreaSelector()
@@ -149,18 +187,60 @@ bbox, info = selector.select_by_city("Milan", radius_km=15)
 # 2. Load bands (manual or with pipeline)
 # ... load B02, B03, B04, B08 ...
 
-# 3. Prepare data
+# 3. Run consensus classification (recommended)
+classifier = ConsensusClassifier(n_clusters=6)
+labels, confidence, uncertainty, stats = classifier.classify(
+    stack, band_indices={'B02': 0, 'B03': 1, 'B04': 2, 'B08': 3}
+)
+
+# 4. Or run K-Means directly
 data = reshape_image_to_table(stack)  # (H*W, 4)
 data_scaled = min_max_scale(data)
-
-# 4. Cluster
 clusterer = KMeansPlusPlusClusterer(n_clusters=6)
 clusterer.fit(data_scaled)
 labels = clusterer.predict(data_scaled)
 ```
 
 ---
+## 🌐 Web UI (Streamlit)
 
+**Interactive web interface** for analyzing cities without command line:
+
+```bash
+# Install UI dependencies
+pip install streamlit
+
+# Launch the web app
+streamlit run scripts/app.py
+```
+
+**Features:**
+- 🏙️ City selection with automatic geocoding
+- 📊 Real-time classification visualization
+- 🗺️ Confidence maps and uncertainty analysis
+- 📥 Export results
+
+---
+
+## 📓 Jupyter Notebooks
+
+Interactive tutorials in `notebooks/`:
+
+| Notebook | Description |
+|----------|-------------|
+| `city_analysis.ipynb` | Complete analysis workflow (recommended) |
+| `clustering_example.ipynb` | K-Means clustering tutorial |
+| `download_example.ipynb` | Sentinel-2 download API guide |
+
+```bash
+# Install notebook dependencies
+pip install jupyter ipykernel
+
+# Launch Jupyter
+jupyter notebook notebooks/
+```
+
+---
 ## � Performance Benchmarks
 
 | Operation | Time | Memory | Notes |
@@ -168,13 +248,16 @@ labels = clusterer.predict(data_scaled)
 | Download (1.2GB) | ~5 min | - | Sentinel-2 tile |
 | Crop to city | ~30s | <1GB | 92% reduction |
 | K-Means (full tile) | 5+ min | 25GB | 120M pixels → OOM |
-| **K-Means (cropped)** | **40s** | **2GB** | **10x faster** ✨ |
+| **Consensus (cropped)** | **45s** | **2GB** | **Recommended** ✨ |
+| K-Means (cropped) | ~40s | ~2GB | Clustering only |
 | Spectral classification | <10s | <1GB | Rule-based |
+| Validation report | <5s | <1GB | Metrics + plots |
 
 **Optimization Highlights**:
 - ✅ Chunked distance calculation (10K samples/chunk) → No OOM
 - ✅ Smart sampling (train 2M, predict all) → 10x speedup
 - ✅ City cropping (92% reduction) → Focused analysis
+- ✅ Consensus validation → Confidence in results
 
 ---
 
@@ -209,19 +292,20 @@ MIT License - See LICENSE file
 
 ---
 
-## � Roadmap
+## 🗺️ Roadmap
 
-**v0.9.0** (Current) - K-Means Clustering ✅
-- Custom K-Means with memory optimization
-- City cropping methodology
-- One-command analysis script
+**v1.0.0** (Current) - Production Release ✅
+- ✅ Consensus classification (K-Means + Spectral)
+- ✅ Validation suite (OA, Kappa, F1, confusion matrix)
+- ✅ Confidence scoring and uncertainty flagging
+- ✅ One-command analysis with consensus default
 
-**v1.0.0** (Next) - Consensus Logic
-- Multi-method consensus classification
-- Confidence scores
-- Enhanced visualization
+**v1.1.0** (Next) - Batch Processing
+- Batch analysis for multiple cities
+- PDF report generation
+- Temporal analysis (multi-date comparison)
 
-See `private_docs/GAP_ANALYSIS.md` for detailed roadmap.
+See `CHANGELOG.md` for detailed version history.
 
 ---
 
@@ -231,20 +315,7 @@ Found a bug? Have a feature request? Please open an issue on GitHub.
 
 ---
 
-**Version**: 0.9.0 - **K-Means Clustering Release** ✨  
-**Last Updated**: October 15, 2025
+**Version**: 1.0.0 - **Production Release** 🚀  
+**Last Updated**: December 18, 2025
 
-```bash
-# Install UV and dependencies
-pip install uv
-git clone https://github.com/VTvito/satellite_git.git
-cd satellite_git
-uv venv
-.venv\Scripts\activate  # Windows
-uv pip install -e .
-```
-
-### Configure OAuth2
-Register at [Copernicus Data Space](https://dataspace.copernicus.eu/) and edit `config/config.yaml`:
-```yaml
 **Made with ❤️ for satellite imagery analysis**

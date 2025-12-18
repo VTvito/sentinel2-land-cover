@@ -8,7 +8,8 @@ Analyze any city using Sentinel-2 data: detect water, vegetation, urban areas, a
 python scripts/analyze_city.py --city Milan
 ```
 
-![Example Output](docs/example_output.png)
+![Milan Land Cover Classification](docs/example_output.png)
+*Sample output: Milan city center land cover classification*
 
 ---
 
@@ -48,7 +49,7 @@ pip install -e .
 ### 2. Run
 
 ```bash
-# Analyze Milan (uses included sample data)
+# Analyze Milan (requires satellite data - see "Download Your Own Data" below)
 python scripts/analyze_city.py --city Milan
 
 # Results in: data/cities/milan/
@@ -57,11 +58,11 @@ python scripts/analyze_city.py --city Milan
 ### 3. See Results
 
 ```
-data/cities/milan/
-├── preview.png           # RGB satellite image
+data/cities/Milan/
+├── preview.png              # RGB satellite image
 ├── analysis/
-│   ├── consensus.png     # Classification result
-│   └── confidence_map.png
+│   ├── consensus.png        # Classification map
+│   └── confidence_map.png   # Confidence heatmap
 └── validation/
     └── validation_report.txt
 ```

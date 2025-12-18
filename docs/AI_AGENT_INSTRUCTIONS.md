@@ -67,16 +67,13 @@ satellite_git/
 │   └── pipelines/              # High-level workflows
 │
 ├── notebooks/                  # Interactive tutorials
-│   ├── city_analysis.ipynb     # Complete workflow
-│   ├── clustering_example.ipynb
-│   └── download_example.ipynb
+│   └── city_analysis.ipynb     # Complete workflow tutorial
 │
 ├── tests/                      # Unit tests
 ├── config/                     # Configuration files
 ├── data/                       # Data directory (gitignored)
 │
 ├── README.md                   # Main documentation
-├── QUICKSTART.md               # Getting started guide
 ├── CHANGELOG.md                # Version history
 └── pyproject.toml              # Dependencies
 ```
@@ -242,8 +239,8 @@ CLASSES = {
 | File | Purpose |
 |------|---------|
 | README.md | Main project documentation |
-| QUICKSTART.md | 5-minute getting started |
 | CHANGELOG.md | Version history |
+| docs/AI_AGENT_INSTRUCTIONS.md | AI agent guidelines |
 
 ### Configuration
 | File | Purpose |

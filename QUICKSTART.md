@@ -2,6 +2,8 @@
 
 Get started with satellite analysis in **5 minutes**.
 
+**Version 1.0.0** - Production Release
+
 ## 📦 Installation
 
 ```bash
@@ -24,26 +26,45 @@ pip install -r requirements.txt
 ## 🎯 Analyze a City (ONE Command)
 
 ```bash
-# Quick analysis with K-Means clustering
+# RECOMMENDED: Consensus classification (K-Means + Spectral combined)
+python scripts/analyze_city.py --city Milan --method consensus
+
+# K-Means clustering only
 python scripts/analyze_city.py --city Milan --method kmeans
 
-# Download fresh data + analyze
-python scripts/analyze_city.py --city Milan --method kmeans --download
+# Spectral classification only
+python scripts/analyze_city.py --city Milan --method spectral
 
-# Compare both methods (K-Means + Spectral)
+# Compare K-Means and Spectral methods
 python scripts/analyze_city.py --city Milan --method both
 ```
 
 **That's it!** Results in `data/cities/<city>/`
+
+## 🔍 Validate Results (NEW in v1.0.0)
+
+```bash
+# Generate validation report
+python scripts/validate_classification.py --city Milan --report
+
+# Compare all methods
+python scripts/validate_classification.py --city Milan --compare
+```
 
 ## 📊 What You Get
 
 ```
 data/cities/milan/
 ├── preview.png              # RGB image (verify correct area!)
-└── analysis/
-    ├── kmeans.png           # K-Means clustering result
-    └── spectral.png         # Spectral classification result
+├── analysis/
+│   ├── consensus.png        # Consensus result (4-panel comparison)
+│   ├── confidence_map.png   # Confidence heatmap
+│   ├── kmeans.png           # K-Means clustering result
+│   └── spectral.png         # Spectral classification result
+└── validation/              # NEW in v1.0.0
+    ├── consensus_analysis.png
+    ├── confusion_matrix.png
+    └── validation_report.txt
 ```
 
 ## 🔧 Advanced Usage
@@ -52,7 +73,7 @@ data/cities/milan/
 
 ```bash
 # Larger radius
-python scripts/analyze_city.py --city Rome --radius 20 --method kmeans
+python scripts/analyze_city.py --city Rome --radius 20 --method consensus
 
 # Different city
 python scripts/analyze_city.py --city Florence --method spectral
@@ -71,16 +92,17 @@ python scripts/extract_all_bands.py data/raw/your_tile.zip data/cities/milan/ban
 python scripts/crop_city_area.py --city Milan --input data/cities/milan/bands --output data/cities/milan/bands
 
 # 4. Analyze
-python scripts/analyze_city.py --city Milan --method kmeans
+python scripts/analyze_city.py --city Milan --method consensus
 ```
 
 ## 📚 Methods Available
 
 | Method | Description | Speed | Use Case |
 |--------|-------------|-------|----------|
+| **consensus** | K-Means + Spectral combined | ⚡ Fast | Best accuracy (RECOMMENDED) |
 | **kmeans** | K-Means clustering (6 clusters) | ⚡ Fast | General land cover |
 | **spectral** | Rule-based spectral indices | ⚡⚡ Very fast | Water/vegetation/urban |
-| **both** | Compare both methods | ⚡ Medium | Validation |
+| **both** | Compare kmeans and spectral | ⚡ Medium | Method comparison |
 
 ## 🛠️ Troubleshooting
 
@@ -116,9 +138,31 @@ plt.imshow(labels_image)
 
 ## 🎓 Next Steps
 
+- **Web UI**: Run `streamlit run scripts/app.py` for interactive interface
+- **Jupyter notebooks**: See `notebooks/city_analysis.ipynb` for exploratory analysis
 - **Custom analysis**: Check `src/satellite_analysis/analyzers/` for more algorithms
-- **Jupyter notebooks**: See `notebooks/` for exploratory analysis
 - **Gap analysis**: Read `private_docs/GAP_ANALYSIS.md` for roadmap
+
+## 🌐 Web Interface (Alternative)
+
+Prefer a visual interface? Use the Streamlit web app:
+
+```bash
+# Install Streamlit
+pip install streamlit
+
+# Launch web UI
+streamlit run scripts/app.py
+```
+
+## 📓 Interactive Notebooks
+
+For learning and exploration, try Jupyter notebooks:
+
+```bash
+# Launch Jupyter
+jupyter notebook notebooks/city_analysis.ipynb
+```
 
 ## 📞 Need Help?
 

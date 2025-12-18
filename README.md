@@ -157,7 +157,7 @@ To analyze new cities, you need Sentinel-2 imagery:
 ## Project Structure
 
 ```
-satellite_git/
+sentinel2-land-cover/
 ├── scripts/           # Command-line tools
 │   ├── analyze_city.py        # Main analysis script
 │   ├── app.py                 # Web UI (Streamlit)
@@ -193,11 +193,7 @@ satellite_git/
 
 ## Motivation
 
-<<<<<<< HEAD
-In October 2023, the **Copernicus Open Access Hub was retired**, breaking the widely-used `sentinelsat` library ([see discussion](https://github.com/sentinelsat/sentinelsat/issues/607)). Thousands of researchers and developers lost their workflows.
-=======
 The Copernicus Data Space Ecosystem has introduced a new API for accessing Sentinel-2 imagery. This toolkit provides:
->>>>>>> f3fd922 (docs: Neutralize README - remove controversial language, focus on capabilities)
 
 1. ✅ Direct integration with the **Copernicus Data Space Ecosystem API**
 2. ✅ **One-command analysis pipeline** (download, preprocess, classify)
@@ -225,7 +221,8 @@ Contributions are welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-You can use also: docs/AI_AGENT_INSTRUCTIONS.md to align easily your AI Agent ;)
+Check [docs/AI_AGENT_INSTRUCTIONS.md](docs/AI_AGENT_INSTRUCTIONS.md) for AI agent guidelines.
+
 ---
 
 ## License

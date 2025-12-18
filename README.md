@@ -50,7 +50,14 @@ python -m venv .venv
 pip install -e .
 ```
 
-### 2. Run
+### 2. Try Demo Mode (No Data Required)
+
+```bash
+# Instant demo with sample data
+python scripts/analyze_city.py --demo
+```
+
+### 3. Analyze Your City
 
 ```bash
 # Analyze Milan (requires satellite data - see "Download Your Own Data" below)
@@ -59,7 +66,7 @@ python scripts/analyze_city.py --city Milan
 # Results in: data/cities/milan/
 ```
 
-### 3. See Results
+### 4. See Results
 
 ```
 data/cities/milan/

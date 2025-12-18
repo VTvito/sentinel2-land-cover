@@ -1,6 +1,6 @@
 [project]
 name = "satellite-image-analysis"
-version = "1.0.0"
+version = "1.1.0"
 description = "Satellite image analysis toolkit with clustering, classification, and validation"
 readme = "README.md"
 requires-python = ">=3.10"

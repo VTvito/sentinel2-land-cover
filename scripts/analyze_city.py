@@ -12,11 +12,15 @@ USAGE:
     
     # Compare methods
     python analyze_city.py --city Milan --method both
+    
+    # Consensus classification (K-Means + Spectral combined)
+    python analyze_city.py --city Milan --method consensus
 
 METHODS:
     - kmeans: K-Means clustering (6 clusters, fast)
     - spectral: Spectral indices classification (rule-based)
-    - both: Run both and compare
+    - consensus: Combined K-Means + Spectral with confidence scoring (NEW v1.0.0)
+    - both: Run kmeans and spectral, compare results
 
 OUTPUT:
     data/cities/<city>/
@@ -25,6 +29,7 @@ OUTPUT:
         └── analysis/
             ├── kmeans.png      # K-Means result
             ├── spectral.png    # Spectral result
+            ├── consensus.png   # Consensus result (if method=consensus)
             └── comparison.png  # Side-by-side (if both)
 """
 
@@ -41,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from satellite_analysis.utils import AreaSelector
 from satellite_analysis.analyzers.clustering import KMeansPlusPlusClusterer
-from satellite_analysis.analyzers.classification import SpectralIndicesClassifier
+from satellite_analysis.analyzers.classification import SpectralIndicesClassifier, ConsensusClassifier
 from satellite_analysis.preprocessing.normalization import min_max_scale
 from satellite_analysis.preprocessing.reshape import reshape_image_to_table, reshape_table_to_image
 
@@ -320,6 +325,130 @@ class CityAnalyzer:
         print(f"\n   ✅ Saved: {result_path}")
         
         return labels, result_path
+    
+    def analyze_consensus(self, stack, rgb):
+        """Run Consensus classification (K-Means + Spectral combined)."""
+        print("\n🔮 Consensus Classification (K-Means + Spectral)")
+        print("-" * 60)
+        
+        band_indices = {'B02': 0, 'B03': 1, 'B04': 2, 'B08': 3}
+        
+        # Initialize consensus classifier
+        classifier = ConsensusClassifier(
+            n_clusters=6,
+            confidence_threshold=0.5,
+            sample_size=2_000_000,
+            random_state=42
+        )
+        
+        print(f"   Data: {stack.shape[0] * stack.shape[1]:,} pixels × {stack.shape[2]} bands")
+        
+        # Run consensus classification
+        labels, confidence, uncertainty, stats = classifier.classify(
+            stack,
+            band_indices,
+            has_swir=False
+        )
+        
+        # Print statistics
+        print(f"\n   📊 Consensus Statistics:")
+        print(f"      K-Means/Spectral Agreement: {stats['agreement_pct']:.1f}%")
+        print(f"      Average Confidence: {stats['avg_confidence']:.2f}")
+        print(f"      Uncertain Pixels: {stats['uncertain_pct']:.1f}%")
+        
+        print(f"\n   Class Distribution:")
+        for cls_name, info in stats['class_distribution'].items():
+            print(f"      {cls_name:<15}: {info['percentage']:>5.1f}%")
+        
+        # Visualize
+        output_dir = self.base_dir / "analysis"
+        output_dir.mkdir(exist_ok=True)
+        
+        # Create 2x2 figure: RGB, K-Means, Spectral, Consensus
+        fig, axes = plt.subplots(2, 2, figsize=(16, 16))
+        
+        from matplotlib.colors import ListedColormap
+        from matplotlib.patches import Patch
+        
+        # Class colors
+        colors = [
+            '#0000FF',  # Water - Blue
+            '#228B22',  # Vegetation - Forest Green
+            '#8B4513',  # Bare Soil - Saddle Brown
+            '#808080',  # Urban - Gray
+            '#FFFF00',  # Bright Surfaces - Yellow
+            '#000000'   # Shadows/Mixed - Black
+        ]
+        cmap = ListedColormap(colors)
+        
+        # K-Means colors (clusters)
+        kmeans_colors = plt.cm.tab10(np.linspace(0, 1, 6))
+        kmeans_cmap = ListedColormap(kmeans_colors)
+        
+        class_names = classifier.CLASSES
+        
+        # RGB
+        axes[0, 0].imshow(rgb)
+        axes[0, 0].set_title(f'{self.city} - RGB True Color', fontsize=12, fontweight='bold')
+        axes[0, 0].axis('off')
+        
+        # K-Means
+        axes[0, 1].imshow(classifier.labels_kmeans_, cmap=kmeans_cmap, interpolation='nearest')
+        axes[0, 1].set_title(f'{self.city} - K-Means Clustering (K=6)', fontsize=12, fontweight='bold')
+        axes[0, 1].axis('off')
+        
+        # Add cluster legend
+        cluster_legend = [Patch(facecolor=kmeans_colors[i], label=f'C{i}→{stats["cluster_mapping"].get(i, "?")}') 
+                         for i in range(6)]
+        axes[0, 1].legend(handles=cluster_legend, loc='upper right', fontsize=8)
+        
+        # Spectral (mapped to consensus classes)
+        spectral_mapped = np.vectorize(
+            lambda x: classifier.SPECTRAL_TO_CONSENSUS.get(x, 5)
+        )(classifier.labels_spectral_)
+        axes[1, 0].imshow(spectral_mapped, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
+        axes[1, 0].set_title(f'{self.city} - Spectral Classification', fontsize=12, fontweight='bold')
+        axes[1, 0].axis('off')
+        
+        # Consensus
+        im = axes[1, 1].imshow(labels, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
+        axes[1, 1].set_title(f'{self.city} - Consensus ({stats["agreement_pct"]:.0f}% agreement)', 
+                            fontsize=12, fontweight='bold')
+        axes[1, 1].axis('off')
+        
+        # Legend for class colors
+        legend_elements = [Patch(facecolor=colors[i], label=class_names[i]) for i in range(6)]
+        
+        # Add legend below the plots
+        fig.legend(handles=legend_elements, loc='lower center', ncol=6, fontsize=10,
+                  bbox_to_anchor=(0.5, 0.02))
+        
+        plt.tight_layout(rect=[0, 0.05, 1, 1])
+        result_path = output_dir / "consensus.png"
+        plt.savefig(result_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print(f"\n   ✅ Saved: {result_path}")
+        
+        # Also save confidence map
+        fig, ax = plt.subplots(figsize=(12, 10))
+        im = ax.imshow(confidence, cmap='RdYlGn', vmin=0, vmax=1)
+        ax.set_title(f'{self.city} - Classification Confidence', fontsize=14, fontweight='bold')
+        ax.axis('off')
+        plt.colorbar(im, ax=ax, label='Confidence (0=Low, 1=High)', fraction=0.046)
+        
+        # Add stats annotation
+        stats_text = f"Avg: {stats['avg_confidence']:.2f} | Uncertain: {stats['uncertain_pct']:.1f}%"
+        ax.text(0.5, -0.05, stats_text, transform=ax.transAxes, ha='center', fontsize=10)
+        
+        plt.tight_layout()
+        confidence_path = output_dir / "confidence_map.png"
+        plt.savefig(confidence_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print(f"   ✅ Saved: {confidence_path}")
+        
+        return labels, result_path
 
 
 def main():
@@ -332,10 +461,13 @@ Examples:
   # Quick K-Means analysis (uses existing data)
   python analyze_city.py --city Milan --method kmeans
   
+  # Consensus classification (recommended for v1.0.0)
+  python analyze_city.py --city Milan --method consensus
+  
   # Download fresh data and analyze
   python analyze_city.py --city Milan --method kmeans --download
   
-  # Compare both methods
+  # Compare K-Means and Spectral methods
   python analyze_city.py --city Milan --method both
   
   # Different city
@@ -347,8 +479,8 @@ Examples:
                        help='City name (e.g., Milan, Rome, Florence)')
     parser.add_argument('--radius', type=float, default=15,
                        help='Radius around city center in km (default: 15)')
-    parser.add_argument('--method', type=str, choices=['kmeans', 'spectral', 'both'],
-                       default='kmeans', help='Analysis method (default: kmeans)')
+    parser.add_argument('--method', type=str, choices=['kmeans', 'spectral', 'consensus', 'both'],
+                       default='consensus', help='Analysis method (default: consensus)')
     parser.add_argument('--download', action='store_true',
                        help='Force download fresh data (otherwise uses existing)')
     parser.add_argument('--data-dir', type=str, default=None,
@@ -357,7 +489,7 @@ Examples:
     args = parser.parse_args()
     
     print("=" * 70)
-    print("🛰️  SATELLITE CITY ANALYZER")
+    print("🛰️  SATELLITE CITY ANALYZER v1.0.0")
     print("=" * 70)
     
     # Initialize analyzer
@@ -376,12 +508,18 @@ Examples:
             analyzer.download_and_prepare()
         except Exception as e:
             print(f"\n❌ Download failed: {e}")
-            print("   Using manual workflow instead:")
-            print(f"   1. Download tile covering {args.city}")
+        
+        # Re-check if data is now available
+        has_data = analyzer.check_data_available()
+        if not has_data:
+            print("\n❌ No data available after download attempt.")
+            print("   Please use manual workflow:")
+            print(f"   1. Download Sentinel-2 tile covering {args.city}")
             print(f"   2. Extract bands to: {analyzer.base_dir / 'bands'}")
+            print(f"   3. Re-run: python scripts/analyze_city.py --city {args.city}")
             return 1
     else:
-        print(f"\n✅ Using existing data in: {analyzer.base_dir / 'bands'}")
+        print(f"\n✅ Using existing data in: {analyzer.bands_dir}")
     
     # Load bands
     stack, band_names = analyzer.load_bands()
@@ -394,6 +532,10 @@ Examples:
     
     # Run analysis
     results = {}
+    
+    if args.method == 'consensus':
+        labels_cons, path_cons = analyzer.analyze_consensus(stack, rgb)
+        results['consensus'] = (labels_cons, path_cons)
     
     if args.method in ['kmeans', 'both']:
         labels_km, path_km = analyzer.analyze_kmeans(stack, rgb)
@@ -411,6 +553,10 @@ Examples:
     print(f"📊 Results:")
     for method, (labels, path) in results.items():
         print(f"   • {method.capitalize()}: {path}")
+    
+    if args.method == 'consensus':
+        print(f"\n💡 TIP: Run validation with:")
+        print(f"   python scripts/validate_classification.py --city {args.city} --report")
     
     return 0
 

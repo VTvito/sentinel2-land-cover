@@ -62,11 +62,18 @@ python scripts/analyze_city.py --city Milan
 ### 3. See Results
 
 ```
-data/cities/Milan/
-├── preview.png              # RGB satellite image
-├── analysis/
-│   ├── consensus.png        # Classification map
-│   └── confidence_map.png   # Confidence heatmap
+data/cities/milan/
+├── metadata.json            # City info, coordinates
+├── bands/                   # Satellite bands (B02, B03, B04, B08)
+├── runs/                    # Timestamped analysis runs
+│   └── 2025-12-18_14-30-00_consensus/
+│       ├── run_info.json    # Parameters, duration, statistics
+│       ├── labels.npy       # Classification result
+│       ├── confidence.npy   # Confidence scores  
+│       ├── consensus.png    # Visualization
+│       └── confidence_map.png
+├── latest/                  # Copy of most recent run
+├── analysis/                # Backward-compatible output
 └── validation/
     └── validation_report.txt
 ```
@@ -168,12 +175,20 @@ sentinel2-land-cover/
 │
 ├── src/satellite_analysis/    # Core library
 │   ├── analyzers/     # Classification algorithms
+│   │   ├── classification/    # ConsensusClassifier, SpectralIndices
+│   │   └── clustering/        # K-Means++
 │   ├── validation/    # Accuracy metrics
-│   └── utils/         # Helpers
+│   └── utils/         # OutputManager, AreaSelector
+│
+├── tests/             # Test suite (31 tests)
+│   └── test_user_workflows.py
 │
 ├── data/              # Your data (gitignored)
 │   └── cities/
 │       └── milan/
+│           ├── bands/         # Satellite bands
+│           ├── runs/          # Timestamped results
+│           └── latest/        # Most recent run
 │
 └── config/            # Configuration
     └── config.yaml    # API credentials

@@ -19,18 +19,24 @@ USAGE:
 METHODS:
     - kmeans: K-Means clustering (6 clusters, fast)
     - spectral: Spectral indices classification (rule-based)
-    - consensus: Combined K-Means + Spectral with confidence scoring (NEW v1.0.0)
+    - consensus: Combined K-Means + Spectral with confidence scoring (recommended)
     - both: Run kmeans and spectral, compare results
 
-OUTPUT:
+OUTPUT STRUCTURE:
     data/cities/<city>/
-        ├── bands/              # Cropped bands
-        ├── preview.png         # RGB preview
-        └── analysis/
-            ├── kmeans.png      # K-Means result
-            ├── spectral.png    # Spectral result
-            ├── consensus.png   # Consensus result (if method=consensus)
-            └── comparison.png  # Side-by-side (if both)
+    ├── metadata.json           # City info, coordinates
+    ├── bands/                  # Satellite bands (B02, B03, B04, B08)
+    ├── runs/                   # Timestamped analysis runs
+    │   ├── 2025-12-18_14-30-00_consensus/
+    │   │   ├── run_info.json   # Parameters, duration, statistics
+    │   │   ├── labels.npy      # Classification result
+    │   │   ├── confidence.npy  # Confidence scores
+    │   │   ├── consensus.png   # Visualization
+    │   │   └── confidence_map.png
+    │   └── ...
+    ├── latest/                 # Copy of most recent run
+    ├── analysis/               # Backward-compatible output
+    └── validation/             # Validation reports
 """
 
 import argparse
@@ -44,7 +50,7 @@ from datetime import datetime
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from satellite_analysis.utils import AreaSelector
+from satellite_analysis.utils import AreaSelector, OutputManager
 from satellite_analysis.analyzers.clustering import KMeansPlusPlusClusterer
 from satellite_analysis.analyzers.classification import SpectralIndicesClassifier, ConsensusClassifier
 from satellite_analysis.preprocessing.normalization import min_max_scale
@@ -52,11 +58,14 @@ from satellite_analysis.preprocessing.reshape import reshape_image_to_table, res
 
 
 class CityAnalyzer:
-    """All-in-one city analyzer."""
+    """All-in-one city analyzer with organized output."""
     
     def __init__(self, city_name: str, radius_km: float = 15, use_existing_dir: str = None):
         self.city = city_name
         self.radius = radius_km
+        
+        # Initialize output manager for organized storage
+        self.output_manager = OutputManager(city_name)
         
         # Allow using existing directory (for milano_centro)
         if use_existing_dir:
@@ -256,31 +265,58 @@ class CityAnalyzer:
         return labels_image, result_path
     
     def analyze_spectral(self, stack, rgb):
-        """Run Spectral Indices classification."""
-        print("\n🌈 Spectral Indices Classification")
+        """Run Spectral Indices classification (simplified without SWIR)."""
+        print("\n🌈 Spectral Indices Classification (Simplified - No SWIR)")
         print("-" * 60)
-        
-        # Create raster-like dict for classifier
-        raster = {
-            'B02': stack[:, :, 0],
-            'B03': stack[:, :, 1],
-            'B04': stack[:, :, 2],
-            'B08': stack[:, :, 3]
-        }
         
         band_indices = {'B02': 0, 'B03': 1, 'B04': 2, 'B08': 3}
         
-        # Classify
-        classifier = SpectralIndicesClassifier()
-        labels = classifier.classify(raster, band_indices)
+        # Use simplified classification (no SWIR bands available)
+        # This is the same logic as ConsensusClassifier._classify_spectral_simple
+        blue = stack[:, :, 0].astype(np.float32)
+        green = stack[:, :, 1].astype(np.float32)
+        red = stack[:, :, 2].astype(np.float32)
+        nir = stack[:, :, 3].astype(np.float32)
+        
+        # Compute indices
+        ndvi = np.where((nir + red) != 0, (nir - red) / (nir + red), 0)
+        ndwi = np.where((green + nir) != 0, (green - nir) / (green + nir), 0)
+        urban_idx = np.where(nir != 0, red / nir, 0)
+        brightness = (red + green + blue) / 3
+        
+        # Initialize with MIXED class (5)
+        labels = np.full(ndvi.shape, 5, dtype=np.uint8)
+        
+        # Classification rules
+        water_mask = ndwi > 0.3
+        labels[water_mask] = 0
+        
+        veg_mask = (ndvi > 0.4) & ~water_mask
+        labels[veg_mask] = 1
+        
+        soil_mask = (ndvi < 0.2) & (ndvi > -0.1) & (brightness > 500) & ~water_mask
+        labels[soil_mask] = 2
+        
+        urban_mask = (ndvi < 0.3) & (urban_idx > 0.6) & ~water_mask & ~soil_mask
+        labels[urban_mask] = 3
+        
+        bright_mask = (brightness > 2000) & (ndvi < 0.1) & ~water_mask
+        labels[bright_mask] = 4
         
         # Statistics
         unique, counts = np.unique(labels, return_counts=True)
         print(f"\n   Class Distribution:")
-        class_names = classifier.class_names
+        class_names = {
+            0: 'Water',
+            1: 'Vegetation',
+            2: 'Bare Soil',
+            3: 'Urban',
+            4: 'Bright Surfaces',
+            5: 'Shadows/Mixed'
+        }
         for class_id, count in zip(unique, counts):
             pct = count / labels.size * 100
-            print(f"      {class_names.get(class_id, f'Class {class_id}')}: {pct:>5.1f}%")
+            print(f"      {class_names.get(class_id, f'Class {class_id}'):20s}: {pct:>5.1f}%")
         
         # Visualize
         output_dir = self.base_dir / "analysis"
@@ -360,93 +396,117 @@ class CityAnalyzer:
         for cls_name, info in stats['class_distribution'].items():
             print(f"      {cls_name:<15}: {info['percentage']:>5.1f}%")
         
-        # Visualize
+        # Use OutputManager for organized storage
+        with self.output_manager.create_run('consensus', {
+            'n_clusters': 6,
+            'confidence_threshold': 0.5,
+            'has_swir': False,
+            'image_shape': list(stack.shape)
+        }) as run:
+            # Save numpy arrays
+            run.save_labels(labels)
+            run.save_confidence(confidence)
+            np.save(run.path / "uncertainty_mask.npy", uncertainty)
+            
+            # Set statistics for metadata
+            run.set_statistics({
+                'agreement_pct': stats['agreement_pct'],
+                'avg_confidence': stats['avg_confidence'],
+                'uncertain_pct': stats['uncertain_pct'],
+                'class_distribution': {k: v['percentage'] for k, v in stats['class_distribution'].items()}
+            })
+            
+            # Create visualizations
+            from matplotlib.colors import ListedColormap
+            from matplotlib.patches import Patch
+            
+            # Class colors
+            colors = [
+                '#0000FF',  # Water - Blue
+                '#228B22',  # Vegetation - Forest Green
+                '#8B4513',  # Bare Soil - Saddle Brown
+                '#808080',  # Urban - Gray
+                '#FFFF00',  # Bright Surfaces - Yellow
+                '#000000'   # Shadows/Mixed - Black
+            ]
+            cmap = ListedColormap(colors)
+            
+            # K-Means colors (clusters)
+            kmeans_colors = plt.cm.tab10(np.linspace(0, 1, 6))
+            kmeans_cmap = ListedColormap(kmeans_colors)
+            
+            class_names = classifier.CLASSES
+            
+            # Create 2x2 figure: RGB, K-Means, Spectral, Consensus
+            fig, axes = plt.subplots(2, 2, figsize=(16, 16))
+            
+            # RGB
+            axes[0, 0].imshow(rgb)
+            axes[0, 0].set_title(f'{self.city} - RGB True Color', fontsize=12, fontweight='bold')
+            axes[0, 0].axis('off')
+            
+            # K-Means
+            axes[0, 1].imshow(classifier.labels_kmeans_, cmap=kmeans_cmap, interpolation='nearest')
+            axes[0, 1].set_title(f'{self.city} - K-Means Clustering (K=6)', fontsize=12, fontweight='bold')
+            axes[0, 1].axis('off')
+            
+            # Add cluster legend
+            cluster_legend = [Patch(facecolor=kmeans_colors[i], label=f'C{i}→{stats["cluster_mapping"].get(i, "?")}') 
+                             for i in range(6)]
+            axes[0, 1].legend(handles=cluster_legend, loc='upper right', fontsize=8)
+            
+            # Spectral (mapped to consensus classes)
+            spectral_mapped = np.vectorize(
+                lambda x: classifier.SPECTRAL_TO_CONSENSUS.get(x, 5)
+            )(classifier.labels_spectral_)
+            axes[1, 0].imshow(spectral_mapped, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
+            axes[1, 0].set_title(f'{self.city} - Spectral Classification', fontsize=12, fontweight='bold')
+            axes[1, 0].axis('off')
+            
+            # Consensus
+            im = axes[1, 1].imshow(labels, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
+            axes[1, 1].set_title(f'{self.city} - Consensus ({stats["agreement_pct"]:.0f}% agreement)', 
+                                fontsize=12, fontweight='bold')
+            axes[1, 1].axis('off')
+            
+            # Legend for class colors
+            legend_elements = [Patch(facecolor=colors[i], label=class_names[i]) for i in range(6)]
+            
+            # Add legend below the plots
+            fig.legend(handles=legend_elements, loc='lower center', ncol=6, fontsize=10,
+                      bbox_to_anchor=(0.5, 0.02))
+            
+            plt.tight_layout(rect=[0, 0.05, 1, 1])
+            run.save_figure(fig, "consensus.png")
+            plt.close()
+            
+            # Also save confidence map
+            fig, ax = plt.subplots(figsize=(12, 10))
+            im = ax.imshow(confidence, cmap='RdYlGn', vmin=0, vmax=1)
+            ax.set_title(f'{self.city} - Classification Confidence', fontsize=14, fontweight='bold')
+            ax.axis('off')
+            plt.colorbar(im, ax=ax, label='Confidence (0=Low, 1=High)', fraction=0.046)
+            
+            # Add stats annotation
+            stats_text = f"Avg: {stats['avg_confidence']:.2f} | Uncertain: {stats['uncertain_pct']:.1f}%"
+            ax.text(0.5, -0.05, stats_text, transform=ax.transAxes, ha='center', fontsize=10)
+            
+            plt.tight_layout()
+            run.save_figure(fig, "confidence_map.png")
+            plt.close()
+            
+            result_path = run.path / "consensus.png"
+            print(f"\n   ✅ Saved to: {run.path}")
+            print(f"      • consensus.png")
+            print(f"      • confidence_map.png")
+            print(f"      • labels.npy, confidence.npy")
+            print(f"      • run_info.json (metadata)")
+        
+        # Also keep backward-compatible output in analysis/
         output_dir = self.base_dir / "analysis"
         output_dir.mkdir(exist_ok=True)
-        
-        # Create 2x2 figure: RGB, K-Means, Spectral, Consensus
-        fig, axes = plt.subplots(2, 2, figsize=(16, 16))
-        
-        from matplotlib.colors import ListedColormap
-        from matplotlib.patches import Patch
-        
-        # Class colors
-        colors = [
-            '#0000FF',  # Water - Blue
-            '#228B22',  # Vegetation - Forest Green
-            '#8B4513',  # Bare Soil - Saddle Brown
-            '#808080',  # Urban - Gray
-            '#FFFF00',  # Bright Surfaces - Yellow
-            '#000000'   # Shadows/Mixed - Black
-        ]
-        cmap = ListedColormap(colors)
-        
-        # K-Means colors (clusters)
-        kmeans_colors = plt.cm.tab10(np.linspace(0, 1, 6))
-        kmeans_cmap = ListedColormap(kmeans_colors)
-        
-        class_names = classifier.CLASSES
-        
-        # RGB
-        axes[0, 0].imshow(rgb)
-        axes[0, 0].set_title(f'{self.city} - RGB True Color', fontsize=12, fontweight='bold')
-        axes[0, 0].axis('off')
-        
-        # K-Means
-        axes[0, 1].imshow(classifier.labels_kmeans_, cmap=kmeans_cmap, interpolation='nearest')
-        axes[0, 1].set_title(f'{self.city} - K-Means Clustering (K=6)', fontsize=12, fontweight='bold')
-        axes[0, 1].axis('off')
-        
-        # Add cluster legend
-        cluster_legend = [Patch(facecolor=kmeans_colors[i], label=f'C{i}→{stats["cluster_mapping"].get(i, "?")}') 
-                         for i in range(6)]
-        axes[0, 1].legend(handles=cluster_legend, loc='upper right', fontsize=8)
-        
-        # Spectral (mapped to consensus classes)
-        spectral_mapped = np.vectorize(
-            lambda x: classifier.SPECTRAL_TO_CONSENSUS.get(x, 5)
-        )(classifier.labels_spectral_)
-        axes[1, 0].imshow(spectral_mapped, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
-        axes[1, 0].set_title(f'{self.city} - Spectral Classification', fontsize=12, fontweight='bold')
-        axes[1, 0].axis('off')
-        
-        # Consensus
-        im = axes[1, 1].imshow(labels, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
-        axes[1, 1].set_title(f'{self.city} - Consensus ({stats["agreement_pct"]:.0f}% agreement)', 
-                            fontsize=12, fontweight='bold')
-        axes[1, 1].axis('off')
-        
-        # Legend for class colors
-        legend_elements = [Patch(facecolor=colors[i], label=class_names[i]) for i in range(6)]
-        
-        # Add legend below the plots
-        fig.legend(handles=legend_elements, loc='lower center', ncol=6, fontsize=10,
-                  bbox_to_anchor=(0.5, 0.02))
-        
-        plt.tight_layout(rect=[0, 0.05, 1, 1])
-        result_path = output_dir / "consensus.png"
-        plt.savefig(result_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        
-        print(f"\n   ✅ Saved: {result_path}")
-        
-        # Also save confidence map
-        fig, ax = plt.subplots(figsize=(12, 10))
-        im = ax.imshow(confidence, cmap='RdYlGn', vmin=0, vmax=1)
-        ax.set_title(f'{self.city} - Classification Confidence', fontsize=14, fontweight='bold')
-        ax.axis('off')
-        plt.colorbar(im, ax=ax, label='Confidence (0=Low, 1=High)', fraction=0.046)
-        
-        # Add stats annotation
-        stats_text = f"Avg: {stats['avg_confidence']:.2f} | Uncertain: {stats['uncertain_pct']:.1f}%"
-        ax.text(0.5, -0.05, stats_text, transform=ax.transAxes, ha='center', fontsize=10)
-        
-        plt.tight_layout()
-        confidence_path = output_dir / "confidence_map.png"
-        plt.savefig(confidence_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        
-        print(f"   ✅ Saved: {confidence_path}")
+        np.save(output_dir / "labels.npy", labels)
+        np.save(output_dir / "confidence.npy", confidence)
         
         return labels, result_path
 

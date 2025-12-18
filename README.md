@@ -195,7 +195,7 @@ satellite_git/
 
 ## Why This Project?
 
-In October 2023, the **Copernicus Open Access Hub was retired**, breaking the widely-used `sentinelsat` library ([see discussion](https://github.com/sentinelsat/sentinelsat/issues/607)). Thousands of researchers and developers lost their workflows overnight.
+In October 2023, the **Copernicus Open Access Hub was retired**, breaking the widely-used `sentinelsat` library ([see discussion](https://github.com/sentinelsat/sentinelsat/issues/607)). Thousands of researchers and developers lost their workflows.
 
 This toolkit was built to:
 1. ✅ Work with the **new Copernicus Data Space Ecosystem API**
@@ -223,6 +223,7 @@ Contributions are welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+You can use also: docs/AI_AGENT_INSTRUCTIONS.md to align easily your AI Agent ;)
 ---
 
 ## License

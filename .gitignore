@@ -5,6 +5,7 @@ data/processed/
 data/processed_final/
 data/annotations/
 data/previews/
+data/cities/
 
 # Clustering output files (temporary/analysis results)
 **/clustering/
@@ -58,6 +59,7 @@ Thumbs.db
 #*login*.py
 #credentials.txt
 #.env
+config/config.yaml
 
 # Private documentation (internal use only, do NOT commit)
 private_docs/

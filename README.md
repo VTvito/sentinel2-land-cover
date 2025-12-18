@@ -1,14 +1,12 @@
 # 🛰️ Satellite City Analyzer
 
-[![CI](https://github.com/VTvito/satellite_git/actions/workflows/ci.yml/badge.svg)](https://github.com/VTvito/satellite_git/actions/workflows/ci.yml)
+[![CI](https://github.com/VTvito/sentinel2-land-cover/actions/workflows/ci.yml/badge.svg)](https://github.com/VTvito/sentinel2-land-cover/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Classify land cover from Sentinel-2 satellite imagery in one command.**
 
-> 🔄 **Looking for a sentinelsat alternative?** This toolkit works with the new [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/) API after the [deprecation of the old Copernicus Open Access Hub](https://github.com/sentinelsat/sentinelsat/issues/607).
-
-Analyze any city using Sentinel-2 data: detect water, vegetation, urban areas, and more.
+Land cover classification toolkit for the Copernicus Data Space Ecosystem. Analyze any city using Sentinel-2 data: detect water, vegetation, urban areas, and more.
 
 ```bash
 python scripts/analyze_city.py --city Milan
@@ -42,8 +40,8 @@ python scripts/analyze_city.py --city Milan
 ### 1. Install
 
 ```bash
-git clone https://github.com/VTvito/satellite_git.git
-cd satellite_git
+git clone https://github.com/VTvito/sentinel2-land-cover.git
+cd sentinel2-land-cover
 
 python -m venv .venv
 .venv\Scripts\activate      # Windows
@@ -193,24 +191,28 @@ satellite_git/
 
 ---
 
-## Why This Project?
+## Motivation
 
+<<<<<<< HEAD
 In October 2023, the **Copernicus Open Access Hub was retired**, breaking the widely-used `sentinelsat` library ([see discussion](https://github.com/sentinelsat/sentinelsat/issues/607)). Thousands of researchers and developers lost their workflows.
+=======
+The Copernicus Data Space Ecosystem has introduced a new API for accessing Sentinel-2 imagery. This toolkit provides:
+>>>>>>> f3fd922 (docs: Neutralize README - remove controversial language, focus on capabilities)
 
-This toolkit was built to:
-1. ✅ Work with the **new Copernicus Data Space Ecosystem API**
-2. ✅ Provide **one-command analysis** (no manual band stacking)
-3. ✅ Include **validation metrics** (accuracy, kappa, F1-score)
-4. ✅ Offer multiple interfaces (CLI, Web UI, Jupyter)
+1. ✅ Direct integration with the **Copernicus Data Space Ecosystem API**
+2. ✅ **One-command analysis pipeline** (download, preprocess, classify)
+3. ✅ **Built-in land cover classification** (Consensus Classifier: K-Means + Spectral indices)
+4. ✅ **Validation metrics** (accuracy, kappa, F1-score)
+5. ✅ **Multiple interfaces** (CLI, Web UI, Jupyter Notebook)
 
-### Migration from Sentinelsat
+### Use Cases
 
-| Old (sentinelsat) | New (this toolkit) |
-|-------------------|-------------------|
-| `api.query()` | `python scripts/download_products.py --city Milan` |
-| Manual band extraction | Automatic with `extract_all_bands.py` |
-| No classification | Built-in Consensus Classifier |
-| No validation | Full validation suite |
+- Urban sprawl monitoring
+- Forest cover assessment
+- Water body detection
+- Environmental impact analysis
+- Land use classification
+- Research and education
 
 ---
 
@@ -236,4 +238,4 @@ MIT License - Free for personal and commercial use.
 
 - [Full Documentation](CHANGELOG.md)
 - [API Reference](src/satellite_analysis/)
-- [Report Issues](https://github.com/VTvito/satellite_git/issues)
+- [Report Issues](https://github.com/VTvito/sentinel2-land-cover/issues)

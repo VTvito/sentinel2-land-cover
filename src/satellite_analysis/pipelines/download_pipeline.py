@@ -102,22 +102,27 @@ class DownloadPipeline:
         """Create pipeline from configuration file.
         
         Args:
-            config_path: Path to config.yaml
+            config_path: Path to config.yaml (only needs sentinel section)
             
         Returns:
             Configured DownloadPipeline instance
         """
-        config = Config.from_yaml(config_path)
+        import yaml
+        
+        with open(config_path) as f:
+            data = yaml.safe_load(f)
+        
+        sentinel_config = data.get("sentinel", {})
         
         auth = OAuth2AuthStrategy(
-            client_id=config.sentinel.client_id,
-            client_secret=config.sentinel.client_secret
+            client_id=sentinel_config.get("client_id"),
+            client_secret=sentinel_config.get("client_secret")
         )
         
         return cls(
             auth_strategy=auth,
             output_dir="data/raw",
-            max_cloud_cover=config.sentinel.max_cloud_cover,
+            max_cloud_cover=sentinel_config.get("max_cloud_cover", 20.0),
             collection="sentinel-2-l2a"
         )
     

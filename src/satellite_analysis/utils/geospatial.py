@@ -9,18 +9,19 @@ from shapely.ops import transform
 from typing import Tuple, List
 
 
-def get_location(city: str, country: str, user_agent: str = "SatelliteApp"):
+def get_location(city: str, country: str, user_agent: str = "SatelliteApp", timeout: int = 10):
     """Get location coordinates from city and country.
     
     Args:
         city: City name
         country: Country name
         user_agent: User agent string for geocoding API
+        timeout: Request timeout in seconds (default: 10)
         
     Returns:
         Location object with coordinates
     """
-    geolocator = Nominatim(user_agent=user_agent)
+    geolocator = Nominatim(user_agent=user_agent, timeout=timeout)
     location = geolocator.geocode(f"{city}, {country}")
     return location
 

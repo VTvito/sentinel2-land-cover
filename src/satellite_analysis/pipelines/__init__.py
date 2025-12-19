@@ -1,11 +1,11 @@
 """Pipeline orchestration modules."""
 
 from .download_pipeline import DownloadPipeline, DownloadResult
-from .preprocessing_pipeline import PreprocessingPipeline, PreprocessingResult
+from .complete_pipeline import CompletePipeline, AnalysisResult
 
 __all__ = [
     "DownloadPipeline",
     "DownloadResult",
-    "PreprocessingPipeline",
-    "PreprocessingResult"
+    "CompletePipeline",
+    "AnalysisResult"
 ]

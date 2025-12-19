@@ -281,10 +281,10 @@ class TestAnalyzeCityMethods:
 
 
 class TestNotebookAPI:
-    """Test that notebook code matches actual API."""
+    """Test that notebook uses the high-level analyze() API."""
     
     def test_notebook_classification_code(self):
-        """Verify notebook uses correct API."""
+        """Verify notebook uses analyze() API not deprecated low-level APIs."""
         notebook_path = PROJECT_ROOT / "notebooks" / "city_analysis.ipynb"
         
         if not notebook_path.exists():
@@ -294,22 +294,23 @@ class TestNotebookAPI:
         with open(notebook_path, 'r', encoding='utf-8') as f:
             nb = json.load(f)
         
-        # Find classification cell
-        found_correct_api = False
-        found_wrong_api = False
+        found_analyze_api = False
+        found_deprecated_api = False
         
         for cell in nb.get('cells', []):
             if cell.get('cell_type') == 'code':
                 source = ''.join(cell.get('source', []))
                 
-                if 'classifier.classify(' in source:
-                    found_correct_api = True
+                # New high-level API
+                if 'analyze(' in source:
+                    found_analyze_api = True
                 
+                # Deprecated low-level APIs
                 if 'classifier.fit_predict(' in source:
-                    found_wrong_api = True
+                    found_deprecated_api = True
         
-        assert not found_wrong_api, "Notebook still uses deprecated fit_predict() method"
-        assert found_correct_api, "Notebook should use classify() method"
+        assert not found_deprecated_api, "Notebook uses deprecated fit_predict() method"
+        assert found_analyze_api, "Notebook should use analyze() high-level API"
 
 
 class TestDataOrganization:

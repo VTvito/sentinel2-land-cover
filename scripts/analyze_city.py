@@ -1,688 +1,296 @@
-"""
-🛰️ Satellite City Analyzer - All-in-One Script
+"""Satellite City Analyzer - Command-line interface.
 
 ONE COMMAND to analyze any city with Sentinel-2 data.
 
 USAGE:
-    # Quick analysis (uses existing data if available)
-    python analyze_city.py --city Milan --method kmeans
+    # Quick analysis
+    python analyze_city.py --city Florence
     
-    # Full workflow (download + crop + analyze)
-    python analyze_city.py --city Milan --method kmeans --download
+    # With exports
+    python analyze_city.py --city Milan --export geotiff report
     
-    # Compare methods
-    python analyze_city.py --city Milan --method both
+    # Batch analysis
+    python analyze_city.py --cities Milan Rome Florence
     
-    # Consensus classification (K-Means + Spectral combined)
-    python analyze_city.py --city Milan --method consensus
+    # Change detection
+    python analyze_city.py --city Milan --compare 2023-06 2024-06
 
-METHODS:
-    - kmeans: K-Means clustering (6 clusters, fast)
-    - spectral: Spectral indices classification (rule-based)
-    - consensus: Combined K-Means + Spectral with confidence scoring (recommended)
-    - both: Run kmeans and spectral, compare results
-
-OUTPUT STRUCTURE:
-    data/cities/<city>/
-    ├── metadata.json           # City info, coordinates
-    ├── bands/                  # Satellite bands (B02, B03, B04, B08)
-    ├── runs/                   # Timestamped analysis runs
-    │   ├── 2025-12-18_14-30-00_consensus/
-    │   │   ├── run_info.json   # Parameters, duration, statistics
-    │   │   ├── labels.npy      # Classification result
-    │   │   ├── confidence.npy  # Confidence scores
-    │   │   ├── consensus.png   # Visualization
-    │   │   └── confidence_map.png
-    │   └── ...
-    ├── latest/                 # Copy of most recent run
-    ├── analysis/               # Backward-compatible output
-    └── validation/             # Validation reports
+OUTPUT:
+    data/cities/<city>/runs/<timestamp>_consensus/
+    ├── labels.npy          # Classification result
+    ├── confidence.npy      # Confidence scores (0-1)
+    ├── run_info.json       # Metadata and statistics
+    ├── classification.tif  # GeoTIFF (if --export geotiff)
+    └── report.html         # HTML report (if --export report)
 """
 
 import argparse
 import sys
 from pathlib import Path
-import numpy as np
-import rasterio
-import matplotlib.pyplot as plt
-from datetime import datetime
-from tqdm import tqdm
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+# Project root for imports
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
-from satellite_analysis.utils import AreaSelector, OutputManager
-from satellite_analysis.analyzers.clustering import KMeansPlusPlusClusterer
-from satellite_analysis.analyzers.classification import SpectralIndicesClassifier, ConsensusClassifier
-from satellite_analysis.preprocessing.normalization import min_max_scale
-from satellite_analysis.preprocessing.reshape import reshape_image_to_table, reshape_table_to_image
-
-
-class CityAnalyzer:
-    """All-in-one city analyzer with organized output."""
-    
-    def __init__(self, city_name: str, radius_km: float = 15, use_existing_dir: str = None):
-        self.city = city_name
-        self.radius = radius_km
-        
-        # Initialize output manager for organized storage
-        self.output_manager = OutputManager(city_name)
-        
-        # Allow using existing directory (for milano_centro)
-        if use_existing_dir:
-            self.base_dir = Path(use_existing_dir)
-            print(f"\n🌍 City: {city_name}")
-            print(f"   Using existing data: {self.base_dir}")
-            self.bbox = None
-            self.metadata = None
-        else:
-            self.base_dir = Path(f"data/cities/{city_name.lower()}")
-            self.base_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Get city coordinates
-            selector = AreaSelector()
-            self.bbox, self.metadata = selector.select_by_city(city_name, radius_km=radius_km)
-            
-            print(f"\n🌍 City: {city_name}")
-            print(f"   Center: {self.metadata['center'][0]:.4f}°N, {self.metadata['center'][1]:.4f}°E")
-            print(f"   Radius: {radius_km} km")
-            print(f"   Area: {self.metadata['area_km2']:.1f} km²")
-    
-    def check_data_available(self) -> bool:
-        """Check if cropped data exists."""
-        # Try both locations: base_dir and base_dir/bands
-        possible_dirs = [self.base_dir, self.base_dir / "bands"]
-        
-        required_bands = ['B02', 'B03', 'B04', 'B08']
-        
-        for check_dir in possible_dirs:
-            if not check_dir.exists():
-                continue
-            
-            all_found = True
-            for band in required_bands:
-                if not (check_dir / f"{band}.tif").exists():
-                    all_found = False
-                    break
-            
-            if all_found:
-                # Store the correct bands directory
-                self.bands_dir = check_dir
-                return True
-        
-        return False
-    
-    def download_and_prepare(self):
-        """Download full tile and crop to city area."""
-        print("\n📥 Step 1: Download and Crop")
-        print("-" * 60)
-        
-        print("   ⚠️  Automatic download not yet available.")
-        print("   Please use manual workflow:")
-        print(f"   1. Download Sentinel-2 tile covering {self.city}")
-        print(f"   2. Extract bands: python scripts/extract_all_bands.py <zip> {self.base_dir / 'bands'}")
-        print(f"   3. Crop if needed: python scripts/crop_city_area.py --city {self.city}")
-        return None
-    
-    def load_bands(self):
-        """Load cropped bands."""
-        # Use the bands_dir found by check_data_available
-        if not hasattr(self, 'bands_dir'):
-            # Fallback: try both locations
-            for check_dir in [self.base_dir, self.base_dir / "bands"]:
-                if (check_dir / "B02.tif").exists():
-                    self.bands_dir = check_dir
-                    break
-        
-        print("\n📂 Loading bands...")
-        print(f"   From: {self.bands_dir}")
-        
-        stack = []
-        band_names = ['B02', 'B03', 'B04', 'B08']
-        
-        for band in band_names:
-            band_file = self.bands_dir / f"{band}.tif"
-            with rasterio.open(band_file) as src:
-                data = src.read(1)
-                stack.append(data)
-                print(f"   ✅ {band}: {data.shape}")
-        
-        stack = np.stack(stack, axis=-1)  # (H, W, 4)
-        print(f"   Stack shape: {stack.shape}")
-        
-        return stack, band_names
-    
-    def create_preview(self, stack):
-        """Create RGB preview for visual verification."""
-        print("\n🎨 Creating preview...")
-        
-        # Extract RGB
-        rgb = stack[:, :, [2, 1, 0]]  # B04, B03, B02
-        
-        # Normalize
-        rgb_norm = np.zeros_like(rgb, dtype=np.float32)
-        for i in range(3):
-            band = rgb[:, :, i].astype(np.float32)
-            rgb_norm[:, :, i] = (band - band.min()) / (band.max() - band.min() + 1e-10)
-        
-        # Convert to uint8 and equalize
-        rgb_uint8 = (rgb_norm * 255).astype(np.uint8)
-        from PIL import Image, ImageOps
-        rgb_pil = Image.fromarray(rgb_uint8)
-        rgb_pil = ImageOps.equalize(rgb_pil)
-        rgb_eq = np.array(rgb_pil)
-        
-        # Save
-        preview_path = self.base_dir / "preview.png"
-        
-        plt.figure(figsize=(10, 10))
-        plt.imshow(rgb_eq)
-        plt.title(f'{self.city} - RGB True Color', fontsize=14, fontweight='bold')
-        plt.axis('off')
-        
-        # Add center marker
-        h, w = rgb_eq.shape[:2]
-        plt.axhline(y=h//2, color='yellow', linestyle='--', linewidth=1, alpha=0.7)
-        plt.axvline(x=w//2, color='yellow', linestyle='--', linewidth=1, alpha=0.7)
-        
-        plt.tight_layout()
-        plt.savefig(preview_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        
-        print(f"   ✅ Saved: {preview_path}")
-        
-        return rgb_eq, preview_path
-    
-    def analyze_kmeans(self, stack, rgb):
-        """Run K-Means clustering analysis."""
-        print("\n🎯 K-Means Clustering Analysis")
-        print("-" * 60)
-        
-        # Prepare data
-        data = reshape_image_to_table(stack)
-        data_scaled = min_max_scale(data)
-        
-        print(f"   Data: {data.shape[0]:,} pixels × {data.shape[1]} bands")
-        
-        # Sample for training (2M pixels)
-        n_total = len(data_scaled)
-        sample_size = min(2_000_000, n_total)
-        step = max(1, n_total // sample_size)
-        sample_indices = np.arange(0, n_total, step)[:sample_size]
-        sample = data_scaled[sample_indices]
-        
-        print(f"   Training on {len(sample):,} samples...")
-        
-        # Train K-Means++
-        clusterer = KMeansPlusPlusClusterer(n_clusters=6, max_iterations=30)
-        clusterer.fit(sample)
-        
-        print(f"   ✅ Training complete (inertia: {clusterer.inertia_:,.0f})")
-        
-        # Predict all pixels
-        print(f"   Classifying all {n_total:,} pixels...")
-        labels = clusterer.predict(data_scaled)
-        labels_image = reshape_table_to_image(stack.shape, labels)
-        
-        # Statistics
-        unique, counts = np.unique(labels_image, return_counts=True)
-        print(f"\n   Cluster Distribution:")
-        for cluster_id, count in zip(unique, counts):
-            pct = count / labels_image.size * 100
-            print(f"      Cluster {cluster_id}: {pct:>5.1f}%")
-        
-        # Visualize
-        output_dir = self.base_dir / "analysis"
-        output_dir.mkdir(exist_ok=True)
-        
-        fig, axes = plt.subplots(1, 2, figsize=(18, 9))
-        
-        # RGB
-        axes[0].imshow(rgb)
-        axes[0].set_title(f'{self.city} - RGB True Color', fontsize=12, fontweight='bold')
-        axes[0].axis('off')
-        
-        # K-Means
-        from matplotlib.colors import ListedColormap
-        colors = plt.cm.tab10(np.linspace(0, 1, 6))
-        cmap = ListedColormap(colors)
-        
-        im = axes[1].imshow(labels_image, cmap=cmap, interpolation='nearest')
-        axes[1].set_title(f'{self.city} - K-Means Clustering (K=6)', fontsize=12, fontweight='bold')
-        axes[1].axis('off')
-        
-        # Legend
-        from matplotlib.patches import Patch
-        legend_elements = [Patch(facecolor=colors[i], label=f'Cluster {i}') for i in range(6)]
-        axes[1].legend(handles=legend_elements, loc='upper right', fontsize=9)
-        
-        plt.tight_layout()
-        result_path = output_dir / "kmeans.png"
-        plt.savefig(result_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        
-        print(f"\n   ✅ Saved: {result_path}")
-        
-        return labels_image, result_path
-    
-    def analyze_spectral(self, stack, rgb):
-        """Run Spectral Indices classification (simplified without SWIR)."""
-        print("\n🌈 Spectral Indices Classification (Simplified - No SWIR)")
-        print("-" * 60)
-        
-        band_indices = {'B02': 0, 'B03': 1, 'B04': 2, 'B08': 3}
-        
-        # Use simplified classification (no SWIR bands available)
-        # This is the same logic as ConsensusClassifier._classify_spectral_simple
-        blue = stack[:, :, 0].astype(np.float32)
-        green = stack[:, :, 1].astype(np.float32)
-        red = stack[:, :, 2].astype(np.float32)
-        nir = stack[:, :, 3].astype(np.float32)
-        
-        # Compute indices
-        ndvi = np.where((nir + red) != 0, (nir - red) / (nir + red), 0)
-        ndwi = np.where((green + nir) != 0, (green - nir) / (green + nir), 0)
-        urban_idx = np.where(nir != 0, red / nir, 0)
-        brightness = (red + green + blue) / 3
-        
-        # Initialize with MIXED class (5)
-        labels = np.full(ndvi.shape, 5, dtype=np.uint8)
-        
-        # Classification rules
-        water_mask = ndwi > 0.3
-        labels[water_mask] = 0
-        
-        veg_mask = (ndvi > 0.4) & ~water_mask
-        labels[veg_mask] = 1
-        
-        soil_mask = (ndvi < 0.2) & (ndvi > -0.1) & (brightness > 500) & ~water_mask
-        labels[soil_mask] = 2
-        
-        urban_mask = (ndvi < 0.3) & (urban_idx > 0.6) & ~water_mask & ~soil_mask
-        labels[urban_mask] = 3
-        
-        bright_mask = (brightness > 2000) & (ndvi < 0.1) & ~water_mask
-        labels[bright_mask] = 4
-        
-        # Statistics
-        unique, counts = np.unique(labels, return_counts=True)
-        print(f"\n   Class Distribution:")
-        class_names = {
-            0: 'Water',
-            1: 'Vegetation',
-            2: 'Bare Soil',
-            3: 'Urban',
-            4: 'Bright Surfaces',
-            5: 'Shadows/Mixed'
-        }
-        for class_id, count in zip(unique, counts):
-            pct = count / labels.size * 100
-            print(f"      {class_names.get(class_id, f'Class {class_id}'):20s}: {pct:>5.1f}%")
-        
-        # Visualize
-        output_dir = self.base_dir / "analysis"
-        output_dir.mkdir(exist_ok=True)
-        
-        fig, axes = plt.subplots(1, 2, figsize=(18, 9))
-        
-        # RGB
-        axes[0].imshow(rgb)
-        axes[0].set_title(f'{self.city} - RGB True Color', fontsize=12, fontweight='bold')
-        axes[0].axis('off')
-        
-        # Classification
-        from matplotlib.colors import ListedColormap
-        colors = [
-            '#0000FF',  # Water
-            '#90EE90',  # Vegetation
-            '#8B4513',  # Bare soil
-            '#808080',  # Urban
-            '#FFFF00',  # Bright surfaces
-            '#000000'   # Shadows
-        ]
-        cmap = ListedColormap(colors)
-        
-        im = axes[1].imshow(labels, cmap=cmap, interpolation='nearest', vmin=0, vmax=5)
-        axes[1].set_title(f'{self.city} - Spectral Classification', fontsize=12, fontweight='bold')
-        axes[1].axis('off')
-        
-        # Legend
-        from matplotlib.patches import Patch
-        legend_elements = [
-            Patch(facecolor=colors[i], label=class_names[i]) 
-            for i in range(6)
-        ]
-        axes[1].legend(handles=legend_elements, loc='upper right', fontsize=9)
-        
-        plt.tight_layout()
-        result_path = output_dir / "spectral.png"
-        plt.savefig(result_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        
-        print(f"\n   ✅ Saved: {result_path}")
-        
-        return labels, result_path
-    
-    def analyze_consensus(self, stack, rgb):
-        """Run Consensus classification (K-Means + Spectral combined)."""
-        print("\n🔮 Consensus Classification (K-Means + Spectral)")
-        print("-" * 60)
-        
-        band_indices = {'B02': 0, 'B03': 1, 'B04': 2, 'B08': 3}
-        
-        # Initialize consensus classifier
-        classifier = ConsensusClassifier(
-            n_clusters=6,
-            confidence_threshold=0.5,
-            sample_size=2_000_000,
-            random_state=42
-        )
-        
-        print(f"   Data: {stack.shape[0] * stack.shape[1]:,} pixels × {stack.shape[2]} bands")
-        
-        # Run consensus classification
-        labels, confidence, uncertainty, stats = classifier.classify(
-            stack,
-            band_indices,
-            has_swir=False
-        )
-        
-        # Print statistics
-        print(f"\n   📊 Consensus Statistics:")
-        print(f"      K-Means/Spectral Agreement: {stats['agreement_pct']:.1f}%")
-        print(f"      Average Confidence: {stats['avg_confidence']:.2f}")
-        print(f"      Uncertain Pixels: {stats['uncertain_pct']:.1f}%")
-        
-        print(f"\n   Class Distribution:")
-        for cls_name, info in stats['class_distribution'].items():
-            print(f"      {cls_name:<15}: {info['percentage']:>5.1f}%")
-        
-        # Use OutputManager for organized storage
-        with self.output_manager.create_run('consensus', {
-            'n_clusters': 6,
-            'confidence_threshold': 0.5,
-            'has_swir': False,
-            'image_shape': list(stack.shape)
-        }) as run:
-            # Save numpy arrays
-            run.save_labels(labels)
-            run.save_confidence(confidence)
-            np.save(run.path / "uncertainty_mask.npy", uncertainty)
-            
-            # Set statistics for metadata
-            run.set_statistics({
-                'agreement_pct': stats['agreement_pct'],
-                'avg_confidence': stats['avg_confidence'],
-                'uncertain_pct': stats['uncertain_pct'],
-                'class_distribution': {k: v['percentage'] for k, v in stats['class_distribution'].items()}
-            })
-            
-            # Create visualizations
-            from matplotlib.colors import ListedColormap
-            from matplotlib.patches import Patch
-            
-            # Class colors
-            colors = [
-                '#0000FF',  # Water - Blue
-                '#228B22',  # Vegetation - Forest Green
-                '#8B4513',  # Bare Soil - Saddle Brown
-                '#808080',  # Urban - Gray
-                '#FFFF00',  # Bright Surfaces - Yellow
-                '#000000'   # Shadows/Mixed - Black
-            ]
-            cmap = ListedColormap(colors)
-            
-            # K-Means colors (clusters)
-            kmeans_colors = plt.cm.tab10(np.linspace(0, 1, 6))
-            kmeans_cmap = ListedColormap(kmeans_colors)
-            
-            class_names = classifier.CLASSES
-            
-            # Create 2x2 figure: RGB, K-Means, Spectral, Consensus
-            fig, axes = plt.subplots(2, 2, figsize=(16, 16))
-            
-            # RGB
-            axes[0, 0].imshow(rgb)
-            axes[0, 0].set_title(f'{self.city} - RGB True Color', fontsize=12, fontweight='bold')
-            axes[0, 0].axis('off')
-            
-            # K-Means
-            axes[0, 1].imshow(classifier.labels_kmeans_, cmap=kmeans_cmap, interpolation='nearest')
-            axes[0, 1].set_title(f'{self.city} - K-Means Clustering (K=6)', fontsize=12, fontweight='bold')
-            axes[0, 1].axis('off')
-            
-            # Add cluster legend
-            cluster_legend = [Patch(facecolor=kmeans_colors[i], label=f'C{i}→{stats["cluster_mapping"].get(i, "?")}') 
-                             for i in range(6)]
-            axes[0, 1].legend(handles=cluster_legend, loc='upper right', fontsize=8)
-            
-            # Spectral (mapped to consensus classes)
-            spectral_mapped = np.vectorize(
-                lambda x: classifier.SPECTRAL_TO_CONSENSUS.get(x, 5)
-            )(classifier.labels_spectral_)
-            axes[1, 0].imshow(spectral_mapped, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
-            axes[1, 0].set_title(f'{self.city} - Spectral Classification', fontsize=12, fontweight='bold')
-            axes[1, 0].axis('off')
-            
-            # Consensus
-            im = axes[1, 1].imshow(labels, cmap=cmap, vmin=0, vmax=5, interpolation='nearest')
-            axes[1, 1].set_title(f'{self.city} - Consensus ({stats["agreement_pct"]:.0f}% agreement)', 
-                                fontsize=12, fontweight='bold')
-            axes[1, 1].axis('off')
-            
-            # Legend for class colors
-            legend_elements = [Patch(facecolor=colors[i], label=class_names[i]) for i in range(6)]
-            
-            # Add legend below the plots
-            fig.legend(handles=legend_elements, loc='lower center', ncol=6, fontsize=10,
-                      bbox_to_anchor=(0.5, 0.02))
-            
-            plt.tight_layout(rect=[0, 0.05, 1, 1])
-            run.save_figure(fig, "consensus.png")
-            plt.close()
-            
-            # Also save confidence map
-            fig, ax = plt.subplots(figsize=(12, 10))
-            im = ax.imshow(confidence, cmap='RdYlGn', vmin=0, vmax=1)
-            ax.set_title(f'{self.city} - Classification Confidence', fontsize=14, fontweight='bold')
-            ax.axis('off')
-            plt.colorbar(im, ax=ax, label='Confidence (0=Low, 1=High)', fraction=0.046)
-            
-            # Add stats annotation
-            stats_text = f"Avg: {stats['avg_confidence']:.2f} | Uncertain: {stats['uncertain_pct']:.1f}%"
-            ax.text(0.5, -0.05, stats_text, transform=ax.transAxes, ha='center', fontsize=10)
-            
-            plt.tight_layout()
-            run.save_figure(fig, "confidence_map.png")
-            plt.close()
-            
-            result_path = run.path / "consensus.png"
-            print(f"\n   ✅ Saved to: {run.path}")
-            print(f"      • consensus.png")
-            print(f"      • confidence_map.png")
-            print(f"      • labels.npy, confidence.npy")
-            print(f"      • run_info.json (metadata)")
-        
-        # Also keep backward-compatible output in analysis/
-        output_dir = self.base_dir / "analysis"
-        output_dir.mkdir(exist_ok=True)
-        np.save(output_dir / "labels.npy", labels)
-        np.save(output_dir / "confidence.npy", confidence)
-        
-        return labels, result_path
+from satellite_analysis import analyze, analyze_batch, compare
+from satellite_analysis import export_geotiff, export_report, export_change_report
 
 
 def main():
-    """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="🛰️ Satellite City Analyzer - One command to analyze any city",
+        description="Satellite Land Cover Analysis CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Quick K-Means analysis (uses existing data)
-  python analyze_city.py --city Milan --method kmeans
+  # Single city analysis
+  python analyze_city.py --city Florence
   
-  # Consensus classification (recommended for v1.0.0)
-  python analyze_city.py --city Milan --method consensus
+  # With exports
+  python analyze_city.py --city Milan --export geotiff report
   
-  # Download fresh data and analyze
-  python analyze_city.py --city Milan --method kmeans --download
+  # Batch multiple cities
+  python analyze_city.py --cities Milan Rome Florence --export report
   
-  # Compare K-Means and Spectral methods
-  python analyze_city.py --city Milan --method both
+  # Change detection between dates
+  python analyze_city.py --city Milan --compare 2023-06 2024-06
   
-  # Different city
-  python analyze_city.py --city Rome --radius 20 --method spectral --download
+  # Full example with all options
+  python analyze_city.py --city Florence --max-size 3000 --classifier consensus --export geotiff report json
         """
     )
     
-    parser.add_argument('--city', type=str, required=False, default=None,
-                       help='City name (e.g., Milan, Rome, Florence)')
-    parser.add_argument('--radius', type=float, default=15,
-                       help='Radius around city center in km (default: 15)')
-    parser.add_argument('--method', type=str, choices=['kmeans', 'spectral', 'consensus', 'both'],
-                       default='consensus', help='Analysis method (default: consensus)')
-    parser.add_argument('--download', action='store_true',
-                       help='Force download fresh data (otherwise uses existing)')
-    parser.add_argument('--data-dir', type=str, default=None,
-                       help='Use existing data directory (e.g., data/processed/milano_centro)')
-    parser.add_argument('--demo', action='store_true',
-                       help='Run demo with sample data (no download needed)')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                       help='Verbose output with progress bars')
+    # City selection (mutually exclusive: single or batch)
+    city_group = parser.add_mutually_exclusive_group(required=True)
+    city_group.add_argument(
+        "--city",
+        help="Single city to analyze (e.g., Florence, Milan, Rome)"
+    )
+    city_group.add_argument(
+        "--cities",
+        nargs="+",
+        help="Multiple cities for batch analysis"
+    )
+    
+    # Processing options
+    parser.add_argument(
+        "--max-size",
+        type=int,
+        default=3000,
+        help="Maximum image dimension (default: 3000)"
+    )
+    parser.add_argument(
+        "--classifier",
+        choices=["kmeans", "spectral", "consensus"],
+        default="consensus",
+        help="Classification method (default: consensus)"
+    )
+    
+    # Export options
+    parser.add_argument(
+        "--export",
+        nargs="+",
+        choices=["geotiff", "report", "json", "all"],
+        help="Export formats: geotiff, report (HTML), json, or all"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Custom output directory"
+    )
+    
+    # Change detection
+    parser.add_argument(
+        "--compare",
+        nargs=2,
+        metavar=("DATE_BEFORE", "DATE_AFTER"),
+        help="Compare two dates (YYYY-MM format)"
+    )
+    
+    # Language
+    parser.add_argument(
+        "--lang",
+        choices=["en", "it"],
+        default="en",
+        help="Report language (default: en)"
+    )
+    
+    # Verbosity
+    parser.add_argument(
+        "-q", "--quiet",
+        action="store_true",
+        help="Minimal output"
+    )
     
     args = parser.parse_args()
     
-    print("=" * 70)
-    print("🛰️  SATELLITE CITY ANALYZER v1.0.0")
-    print("=" * 70)
-    
-    # Demo mode - use sample data
-    if args.demo:
-        print("\n🎮 DEMO MODE - Using sample data")
-        demo_dir = Path("data/demo/milan_sample")
-        if not (demo_dir / "bands" / "B02.tif").exists():
-            print("\n❌ Demo data not found!")
-            return 1
-        args.city = "Milan_Demo"
-        args.data_dir = str(demo_dir)
-        print(f"   Using: {demo_dir}")
-
-    # Check if --city was provided
-    if not args.demo and not args.city:
-        print("\n❌ Error: --city is required (or use --demo)")
-        print("\n   Examples:")
-        print("     python scripts/analyze_city.py --city Milan")
-        print("     python scripts/analyze_city.py --demo")
-        return 1
-
-
-    # Demo mode - use sample data
-    if args.demo:
-        print("\n🎮 DEMO MODE - Using sample data")
-        demo_dir = Path("data/demo/milan_sample")
-        if not (demo_dir / "bands" / "B02.tif").exists():
-            print("\n❌ Demo data not found!")
-            return 1
-        args.city = "Milan_Demo"
-        args.data_dir = str(demo_dir)
-        print(f"   Using: {demo_dir}")
-
-    # Check if --city was provided
-    if not args.demo and not args.city:
-        print("\n❌ Error: --city is required (or use --demo)")
-        print("\n   Examples:")
-        print("     python scripts/analyze_city.py --city Milan")
-        print("     python scripts/analyze_city.py --demo")
-        return 1
-
-
-    # Initialize analyzer
-    analyzer = CityAnalyzer(args.city, args.radius, use_existing_dir=args.data_dir)
-    
-    # Check if data exists
-    has_data = analyzer.check_data_available()
-    
-    if not has_data or args.download:
-        if not has_data:
-            print("\n⚠️  No existing data found. Will download...")
+    # Determine export formats
+    exports = set()
+    if args.export:
+        if "all" in args.export:
+            exports = {"geotiff", "report", "json"}
         else:
-            print("\n♻️  Downloading fresh data...")
+            exports = set(args.export)
+    
+    # Header
+    if not args.quiet:
+        print("=" * 60)
+        print("SATELLITE LAND COVER ANALYSIS")
+        print("=" * 60)
+    
+    try:
+        # Mode: Change Detection
+        if args.compare:
+            return run_change_detection(args, exports)
         
-        try:
-            analyzer.download_and_prepare()
-        except Exception as e:
-            print(f"\n❌ Download failed: {e}")
+        # Mode: Batch Analysis
+        if args.cities:
+            return run_batch_analysis(args, exports)
         
-        # Re-check if data is now available
-        has_data = analyzer.check_data_available()
-        if not has_data:
-            print()
-            print("=" * 60)
-            print("❌ NO SATELLITE DATA FOUND")
-            print("=" * 60)
-            print()
-            print(f"Could not find Sentinel-2 bands for: {args.city}")
-            print(f"Expected location: {analyzer.base_dir / 'bands'}")
-            print()
-            print("🔧 SOLUTIONS:")
-            print()
-            print("   1. Try demo mode (no download needed):")
-            print("      python scripts/analyze_city.py --demo")
-            print()
-            print("   2. Download data from Copernicus:")
-            print("      a) Visit: https://browser.dataspace.copernicus.eu")
-            print(f"      b) Search for '{args.city}' area")
-            print("      c) Download Sentinel-2 L2A product")
-            print(f"      d) Extract: python scripts/extract_all_bands.py <zip> {analyzer.base_dir / 'bands'}")
-            print()
-            print("   3. Setup automatic download:")
-            print("      python scripts/setup.py")
-            print()
-            print("📚 Full guide: https://github.com/VTvito/sentinel2-land-cover#download-your-own-data")
-            print()
-            return 1
-    else:
-        print(f"\n✅ Using existing data in: {analyzer.bands_dir}")
+        # Mode: Single City Analysis
+        return run_single_analysis(args, exports)
+        
+    except FileNotFoundError as e:
+        print(f"\nError: {e}")
+        print("\nTip: Make sure data exists in data/cities/{city}/bands/")
+        return 1
+    except Exception as e:
+        print(f"\nError: {e}")
+        if not args.quiet:
+            import traceback
+            traceback.print_exc()
+        return 1
+
+
+def run_single_analysis(args, exports):
+    """Run analysis for a single city."""
+    print(f"Analyzing: {args.city}")
+    print(f"Options: max_size={args.max_size}, classifier={args.classifier}")
+    print("-" * 60)
     
-    # Load bands
-    stack, band_names = analyzer.load_bands()
+    result = analyze(
+        args.city,
+        max_size=args.max_size,
+        classifier=args.classifier,
+        project_root=PROJECT_ROOT,
+    )
     
-    # Create preview
-    rgb, preview_path = analyzer.create_preview(stack)
-    
-    print(f"\n⚠️  VERIFY: Check preview image to confirm correct city area")
-    print(f"   Preview: {preview_path}")
-    
-    # Run analysis
-    results = {}
-    
-    if args.method == 'consensus':
-        labels_cons, path_cons = analyzer.analyze_consensus(stack, rgb)
-        results['consensus'] = (labels_cons, path_cons)
-    
-    if args.method in ['kmeans', 'both']:
-        labels_km, path_km = analyzer.analyze_kmeans(stack, rgb)
-        results['kmeans'] = (labels_km, path_km)
-    
-    if args.method in ['spectral', 'both']:
-        labels_sp, path_sp = analyzer.analyze_spectral(stack, rgb)
-        results['spectral'] = (labels_sp, path_sp)
+    # Export if requested
+    export_results(result, exports, args.lang, args.output_dir)
     
     # Summary
-    print("\n" + "=" * 70)
-    print("✅ ANALYSIS COMPLETE")
-    print("=" * 70)
-    print(f"\n📁 Output directory: {analyzer.base_dir}")
-    print(f"📊 Results:")
-    for method, (labels, path) in results.items():
-        print(f"   • {method.capitalize()}: {path}")
-    
-    if args.method == 'consensus':
-        print(f"\n💡 TIP: Run validation with:")
-        print(f"   python scripts/validate_classification.py --city {args.city} --report")
+    print_result_summary(result)
     
     return 0
+
+
+def run_batch_analysis(args, exports):
+    """Run analysis for multiple cities."""
+    print(f"Batch analysis: {', '.join(args.cities)}")
+    print(f"Options: max_size={args.max_size}, classifier={args.classifier}")
+    print("-" * 60)
+    
+    def progress(city, status):
+        print(f"  [{city}] {status}")
+    
+    results = analyze_batch(
+        args.cities,
+        max_size=args.max_size,
+        classifier=args.classifier,
+        on_progress=progress,
+    )
+    
+    # Export and summarize each result
+    print("\n" + "=" * 60)
+    print("RESULTS")
+    print("=" * 60)
+    
+    success_count = 0
+    for city, result in results.items():
+        if isinstance(result, Exception):
+            print(f"  {city}: ERROR - {result}")
+        else:
+            success_count += 1
+            print(f"  {city}: {result.avg_confidence:.1%} confidence")
+            export_results(result, exports, args.lang, args.output_dir)
+    
+    print("-" * 60)
+    print(f"Completed: {success_count}/{len(args.cities)} cities")
+    
+    return 0 if success_count == len(args.cities) else 1
+
+
+def run_change_detection(args, exports):
+    """Run change detection between two dates."""
+    date_before, date_after = args.compare
+    city = args.city
+    
+    print(f"Change Detection: {city}")
+    print(f"Period: {date_before} -> {date_after}")
+    print("-" * 60)
+    
+    changes = compare(
+        city,
+        date_before,
+        date_after,
+        max_size=args.max_size,
+        classifier=args.classifier,
+        project_root=PROJECT_ROOT,
+    )
+    
+    # Export change report
+    if "report" in exports or "all" in exports:
+        report_path = export_change_report(changes, language=args.lang)
+        print(f"Report: {report_path}")
+    
+    # Summary
+    print("\n" + "=" * 60)
+    print("CHANGE DETECTION RESULTS")
+    print("=" * 60)
+    print(changes.summary())
+    print("=" * 60)
+    
+    return 0
+
+
+def export_results(result, exports, language, output_dir):
+    """Export result in requested formats."""
+    if not exports:
+        return
+    
+    base_dir = output_dir or result.output_dir
+    base_name = result.city.lower()
+    
+    if "geotiff" in exports:
+        path = export_geotiff(result, base_dir / f"{base_name}_classification.tif")
+        print(f"  Exported GeoTIFF: {path}")
+    
+    if "report" in exports:
+        path = export_report(result, base_dir / f"{base_name}_report.html", language=language)
+        print(f"  Exported Report: {path}")
+    
+    if "json" in exports:
+        from satellite_analysis import export_json
+        path = export_json(result, base_dir / f"{base_name}_results.json")
+        print(f"  Exported JSON: {path}")
+
+
+def print_result_summary(result):
+    """Print analysis result summary."""
+    print("\n" + "=" * 60)
+    print("ANALYSIS COMPLETE")
+    print("=" * 60)
+    print(f"City: {result.city}")
+    print(f"Shape: {result.processed_shape[0]}x{result.processed_shape[1]}")
+    print(f"Confidence: {result.avg_confidence:.1%}")
+    print(f"Time: {result.execution_time:.1f}s")
+    print(f"Output: {result.output_dir}")
+    print("-" * 60)
+    print("Class Distribution:")
+    for cls_id, data in result.class_distribution().items():
+        from satellite_analysis import LAND_COVER_CLASSES
+        name = LAND_COVER_CLASSES.get(cls_id, {}).get("name", f"Class {cls_id}")
+        print(f"  {name}: {data['percentage']:.1f}%")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

@@ -1,65 +1,43 @@
-# ⚡ Quick Start (2 minuti)
+# ⚡ Quick Start
 
-## 1. Installa
+## 1. Install
 
 ```bash
 pip install -e .
 ```
 
-## 2. Prova il demo
+## 2. Analyze
 
-```bash
-python scripts/analyze_city.py --demo
+```python
+from satellite_analysis import analyze
+
+result = analyze("Milan", max_size=2000)
+print(result.summary())
 ```
 
-## 3. Guarda il risultato
-
+Or via CLI:
 ```bash
-# Windows
-start data/demo/milan_sample/consensus.png
-
-# Mac/Linux  
-open data/demo/milan_sample/consensus.png
+python scripts/analyze_city.py --city Milan
 ```
+
+## 3. Export
+
+```python
+from satellite_analysis import export_geotiff, export_report
+
+export_geotiff(result)
+export_report(result, language="it")
+```
+
+## 4. Results
+
+Output in `data/cities/milan/runs/{timestamp}/`:
+- `labels.npy` - Classification
+- `confidence.npy` - Confidence map
+- `milan_classification.tif` - GeoTIFF
+- `milan_report.html` - HTML report
 
 ---
 
-## Analizza una nuova città
-
-### Opzione A: Con credenziali Copernicus (consigliato)
-
-```bash
-# 1. Setup iniziale (una volta sola)
-python scripts/setup.py
-
-# 2. Analizza
-python scripts/analyze_city.py --city Rome --download
-```
-
-### Opzione B: Download manuale
-
-1. Scarica da [Copernicus Browser](https://browser.dataspace.copernicus.eu)
-2. Estrai le bande:
-   ```bash
-   python scripts/extract_all_bands.py your_download.zip data/cities/rome/bands
-   ```
-3. Analizza:
-   ```bash
-   python scripts/analyze_city.py --city Rome
-   ```
-
----
-
-## Comandi utili
-
-| Comando | Descrizione |
-|---------|-------------|
-| `--demo` | Usa dati di esempio (nessun download) |
-| `--method kmeans` | Classificazione veloce |
-| `--method consensus` | Classificazione accurata (default) |
-| `--radius 20` | Raggio area in km |
-| `-v` | Output verboso con progress bar |
-
----
-
-📚 **Documentazione completa:** [README.md](README.md)
+📚 Full docs: [README.md](README.md)
+📓 Notebook: [notebooks/city_analysis.ipynb](notebooks/city_analysis.ipynb)

@@ -42,7 +42,7 @@ class AreaSelector:
         """Select area by city name.
         
         Args:
-            city: City name (e.g., "Milan", "Rome")
+            city: City name (e.g., "Milan", "Rome") - case insensitive
             radius_km: Radius in km (overrides default)
             country: Country name (default: Italy)
         
@@ -56,9 +56,16 @@ class AreaSelector:
             >>> bbox, meta = selector.select_by_city("Milan", radius_km=15)
             >>> print(f"Area: {meta['area_km2']:.1f} km²")
         """
-        # Check predefined cities first
-        if city in self.CITIES:
-            city_info = self.CITIES[city]
+        # Case-insensitive lookup in predefined cities
+        city_key = None
+        for key in self.CITIES:
+            if key.lower() == city.lower():
+                city_key = key
+                break
+        
+        # Check predefined cities first (avoids network call)
+        if city_key:
+            city_info = self.CITIES[city_key]
             lat, lon = city_info["coords"]
             radius = radius_km or city_info["radius_km"]
             
@@ -67,9 +74,9 @@ class AreaSelector:
             from geopy.point import Point
             center_obj = Location("", Point(lat, lon), {})
         else:
-            # Query Nominatim
+            # Query Nominatim for unknown cities
             query = f"{city}, {country}"
-            center_obj = get_location(query, country="")
+            center_obj = get_location(query, country="", timeout=10)  # Longer timeout
             
             if center_obj is None:
                 raise ValueError(f"City '{query}' not found. Try more specific name.")

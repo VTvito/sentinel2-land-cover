@@ -1,34 +1,20 @@
 # Sentinel Configuration
 # Copy this file to config.yaml and add your credentials
 
+# This file contains credentials for automated data download.
+# If you don't have credentials, you can still use:
+#   - Demo mode: python scripts/analyze_city.py --demo
+#   - Manual download from: https://browser.dataspace.copernicus.eu
+
+# Copernicus Data Space Credentials
+# ---------------------------------
+# Required ONLY for automated download via download_products.py
+# Get credentials at: https://dataspace.copernicus.eu
+#   1. Register/Login
+#   2. User Settings > OAuth clients
+#   3. Create new client
+
 sentinel:
-  # Get credentials from: https://dataspace.copernicus.eu/
-  # 1. Register/Login
-  # 2. Go to User Settings > OAuth clients
-  # 3. Create new client
-  client_id: "your_client_id_here"
-  client_secret: "your_client_secret_here"
-  
-  platformname: "Sentinel-2"
-  max_cloud_cover: 10.0
-
-# Area of Interest (defaults)
-area:
-  city: "Milan"
-  country: "Italy"
-  radius_km: 15.0
-
-# Band Configuration
-bands:
-  # 10m resolution bands (main)
-  selected_bands:
-    - "B02"  # Blue
-    - "B03"  # Green
-    - "B04"  # Red
-    - "B08"  # NIR
-
-# Output Configuration
-output:
-  save_preview: true
-  save_classification: true
-  save_confidence: true
+  client_id: null      # Your OAuth client ID
+  client_secret: null  # Your OAuth client secret
+  max_cloud_cover: 20  # Maximum cloud cover % for searches

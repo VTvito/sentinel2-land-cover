@@ -64,6 +64,8 @@ config/config.yaml
 # Private documentation (internal use only, do NOT commit)
 private_docs/
 
+# Archived/deprecated code
+_archived/
 
 # other files
 doc/

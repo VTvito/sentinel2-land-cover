@@ -1,43 +1,32 @@
 # 🛰️ Satellite City Analyzer
 
-[![CI](https://github.com/VTvito/sentinel2-land-cover/actions/workflows/ci.yml/badge.svg)](https://github.com/VTvito/sentinel2-land-cover/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 **Classify land cover from Sentinel-2 satellite imagery in one command.**
-
-Land cover classification toolkit for the Copernicus Data Space Ecosystem. Analyze any city using Sentinel-2 data: detect water, vegetation, urban areas, and more.
 
 ```bash
 python scripts/analyze_city.py --city Milan
 ```
 
-![Milan Land Cover Classification](docs/example_output.png)
-*Sample output: Milan city center land cover classification*
+```python
+from satellite_analysis import analyze
+result = analyze("Milan")
+```
 
 ---
 
-## What It Does
+## Features
 
-| Input | Output |
-|-------|--------|
-| City name (e.g., "Milan") | Land cover classification map |
-| Sentinel-2 satellite bands | Confidence scores per pixel |
-| | Validation report |
+- **One-line API**: `analyze("city")` does everything
+- **Batch processing**: Analyze multiple cities at once
+- **Change detection**: Compare land cover across time periods
+- **Multiple exports**: GeoTIFF, HTML reports, JSON
+- **CLI & Python API**: Use from terminal or code
+- **REST API**: FastAPI server for integrations
 
-**6 Land Cover Classes:**
-- 🌊 Water
-- 🌲 Vegetation  
-- 🏜️ Bare Soil
-- 🏙️ Urban
-- ☀️ Bright Surfaces
-- 🌑 Shadows/Mixed
+**Land Cover Classes**: Water, Vegetation, Urban, Bare Soil, Shadows, Bright Surfaces
 
 ---
 
-## Quick Start (5 minutes)
-
-### 1. Install
+## Installation
 
 ```bash
 git clone https://github.com/VTvito/sentinel2-land-cover.git
@@ -45,160 +34,106 @@ cd sentinel2-land-cover
 
 python -m venv .venv
 .venv\Scripts\activate      # Windows
-# source .venv/bin/activate  # Linux/Mac
+# source .venv/bin/activate # Linux/Mac
 
 pip install -e .
 ```
 
-### 2. Try Demo Mode (No Data Required)
-
+For REST API:
 ```bash
-# Instant demo with sample data
-python scripts/analyze_city.py --demo
+pip install -e ".[api]"
 ```
 
-### 3. Analyze Your City
+---
+
+## Quick Start
+
+### Python API
+
+```python
+from satellite_analysis import analyze, export_report, export_geotiff
+
+# Analyze
+result = analyze("Florence", max_size=2000)
+print(f"Confidence: {result.avg_confidence:.1%}")
+
+# Export
+export_geotiff(result)
+export_report(result, language="en")
+```
+
+### Command Line
 
 ```bash
-# Analyze Milan (requires satellite data - see "Download Your Own Data" below)
+# Single city
 python scripts/analyze_city.py --city Milan
 
-# Results in: data/cities/milan/
+# Batch + export
+python scripts/analyze_city.py --cities Milan Rome Florence --export report geotiff
+
+# Change detection
+python scripts/analyze_city.py --city Milan --compare 2023-06 2024-06
 ```
 
-### 4. See Results
-
-```
-data/cities/milan/
-├── metadata.json            # City info, coordinates
-├── bands/                   # Satellite bands (B02, B03, B04, B08)
-├── runs/                    # Timestamped analysis runs
-│   └── 2025-12-18_14-30-00_consensus/
-│       ├── run_info.json    # Parameters, duration, statistics
-│       ├── labels.npy       # Classification result
-│       ├── confidence.npy   # Confidence scores  
-│       ├── consensus.png    # Visualization
-│       └── confidence_map.png
-├── latest/                  # Copy of most recent run
-├── analysis/                # Backward-compatible output
-└── validation/
-    └── validation_report.txt
-```
-
----
-
-## Three Ways to Use
-
-### 🖥️ Command Line (Recommended)
+### REST API
 
 ```bash
-# Basic analysis
-python scripts/analyze_city.py --city Rome
-
-# With options
-python scripts/analyze_city.py --city Florence --radius 20 --method kmeans
+python scripts/api_server.py  # Starts on localhost:8000
 ```
-
-### 🌐 Web Interface
 
 ```bash
-pip install streamlit
-streamlit run scripts/app.py
+curl -X POST "http://localhost:8000/analyze?city=Milan&max_size=1000"
 ```
-Interactive dashboard with multi-city comparison.
-
-### 📓 Jupyter Notebook
-
-```bash
-jupyter notebook notebooks/city_analysis.ipynb
-```
-Step-by-step tutorial.
 
 ---
 
-## How It Works
+## Configuration
 
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
-│ City Name   │───▶│ Sentinel-2   │───▶│ Classification  │
-│ "Milan"     │    │ Bands        │    │ (6 classes)     │
-└─────────────┘    └──────────────┘    └─────────────────┘
-                          │
-                          ▼
-              ┌──────────────────────┐
-              │ Consensus Classifier │
-              │ • K-Means clustering │
-              │ • Spectral indices   │
-              │ • Confidence scoring │
-              └──────────────────────┘
-```
+Add your [Copernicus Data Space](https://dataspace.copernicus.eu/) credentials to `config/config.yaml`:
 
-**Methods Available:**
-- `consensus` (default) - Best accuracy, combines K-Means + Spectral
-- `kmeans` - Fast clustering
-- `spectral` - Rule-based (water, vegetation, urban detection)
+```yaml
+sentinel:
+  client_id: "your-client-id"
+  client_secret: "your-secret"
+```
 
 ---
 
-## Download Your Own Data
+## Output
 
-To analyze new cities, you need Sentinel-2 imagery:
+Results saved to `data/cities/{city}/runs/{timestamp}/`:
 
-### Option A: Copernicus Data Space (Recommended)
-
-1. Register at [dataspace.copernicus.eu](https://dataspace.copernicus.eu)
-2. Add credentials to `config/config.yaml`:
-   ```yaml
-   sentinel:
-     client_id: "your_client_id"
-     client_secret: "your_client_secret"
-   ```
-3. Download:
-   ```bash
-   python scripts/download_products.py --city Rome --cloud-cover 10
-   ```
-
-### Option B: Manual Download
-
-1. Download from [Copernicus Browser](https://browser.dataspace.copernicus.eu)
-2. Extract bands:
-   ```bash
-   python scripts/extract_all_bands.py your_download.zip data/cities/rome/bands
-   ```
+```
+├── labels.npy           # Classification array
+├── confidence.npy       # Confidence scores (0-1)
+├── run_info.json        # Metadata
+├── {city}_classification.tif  # GeoTIFF (if exported)
+└── {city}_report.html         # HTML report (if exported)
+```
 
 ---
 
-## Project Structure
+## API Reference
 
-```
-sentinel2-land-cover/
-├── scripts/           # Command-line tools
-│   ├── analyze_city.py        # Main analysis script
-│   ├── app.py                 # Web UI (Streamlit)
-│   └── validate_classification.py
-│
-├── notebooks/         # Interactive tutorials
-│   └── city_analysis.ipynb
-│
-├── src/satellite_analysis/    # Core library
-│   ├── analyzers/     # Classification algorithms
-│   │   ├── classification/    # ConsensusClassifier, SpectralIndices
-│   │   └── clustering/        # K-Means++
-│   ├── validation/    # Accuracy metrics
-│   └── utils/         # OutputManager, AreaSelector
-│
-├── tests/             # Test suite (31 tests)
-│   └── test_user_workflows.py
-│
-├── data/              # Your data (gitignored)
-│   └── cities/
-│       └── milan/
-│           ├── bands/         # Satellite bands
-│           ├── runs/          # Timestamped results
-│           └── latest/        # Most recent run
-│
-└── config/            # Configuration
-    └── config.yaml    # API credentials
+```python
+from satellite_analysis import (
+    # Core
+    analyze,           # Single city analysis
+    quick_preview,     # Fast low-res preview
+    analyze_batch,     # Multiple cities
+    
+    # Change Detection
+    compare,           # Compare two time periods
+    
+    # Exports
+    export_geotiff,    # GIS-ready raster
+    export_report,     # HTML report (en/it)
+    export_json,       # Machine-readable
+    
+    # Types
+    LAND_COVER_CLASSES,
+    ChangeResult,
+)
 ```
 
 ---
@@ -206,55 +141,11 @@ sentinel2-land-cover/
 ## Requirements
 
 - Python 3.10+
-- ~2GB RAM for analysis
-- ~1GB disk per city
-
-**Dependencies:** numpy, rasterio, scikit-learn, matplotlib
-
----
-
-## Motivation
-
-The Copernicus Data Space Ecosystem has introduced a new API for accessing Sentinel-2 imagery. This toolkit provides:
-
-1. ✅ Direct integration with the **Copernicus Data Space Ecosystem API**
-2. ✅ **One-command analysis pipeline** (download, preprocess, classify)
-3. ✅ **Built-in land cover classification** (Consensus Classifier: K-Means + Spectral indices)
-4. ✅ **Validation metrics** (accuracy, kappa, F1-score)
-5. ✅ **Multiple interfaces** (CLI, Web UI, Jupyter Notebook)
-
-### Use Cases
-
-- Urban sprawl monitoring
-- Forest cover assessment
-- Water body detection
-- Environmental impact analysis
-- Land use classification
-- Research and education
-
----
-
-## Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Check [docs/AI_AGENT_INSTRUCTIONS.md](docs/AI_AGENT_INSTRUCTIONS.md) for AI agent guidelines.
+- ~2GB RAM
+- Copernicus Data Space credentials (for downloads)
 
 ---
 
 ## License
 
-MIT License - Free for personal and commercial use.
-
----
-
-## Links
-
-- [Full Documentation](CHANGELOG.md)
-- [API Reference](src/satellite_analysis/)
-- [Report Issues](https://github.com/VTvito/sentinel2-land-cover/issues)
+MIT License

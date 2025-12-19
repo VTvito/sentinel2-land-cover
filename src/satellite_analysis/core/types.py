@@ -59,6 +59,12 @@ class AnalysisResult:
     processed_shape: tuple
     config_summary: Dict[str, Any] = field(default_factory=dict)
     
+    # Cropping/geographic metadata
+    bbox: Optional[list] = None
+    city_center: Optional[tuple] = None
+    radius_km: Optional[float] = None
+    cropped_to_city: bool = True
+    
     # Convenience accessors
     @property
     def labels(self) -> np.ndarray:

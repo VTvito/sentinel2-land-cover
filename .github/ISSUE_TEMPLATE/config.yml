@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions / discussions
+    url: https://github.com/VTvito/sentinel2-land-cover/discussions
+    about: Please ask usage questions here (if enabled).

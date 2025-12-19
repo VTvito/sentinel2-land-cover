@@ -18,9 +18,10 @@ Change Detection:
     >>> print(f"Changed: {changes.changed_percentage:.1%}")
 
 Export Results:
-    >>> from satellite_analysis import export_geotiff, export_report
+    >>> from satellite_analysis import export_geotiff, export_report, export_image
     >>> export_geotiff(result, "output.tif")
     >>> export_report(result, "report.html")
+    >>> export_image(result, "summary.png")
 """
 
 __version__ = "2.1.0"
@@ -34,6 +35,7 @@ from satellite_analysis.api import (
     export_geotiff,
     export_report,
     export_json,
+    export_image,
 )
 
 # Change Detection
@@ -70,6 +72,7 @@ __all__ = [
     "export_colored_geotiff",
     "export_report",
     "export_json",
+    "export_image",
     # Types
     "AnalysisConfig",
     "AnalysisResult",

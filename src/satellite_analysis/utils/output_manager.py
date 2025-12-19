@@ -27,8 +27,23 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, Union
 import numpy as np
+
+
+def _find_project_root(start_path: Path) -> Path:
+    """Find project root by looking for pyproject.toml."""
+    current = start_path.resolve()
+    for _ in range(10):
+        if (current / "pyproject.toml").exists():
+            return current
+        if (current / "src" / "satellite_analysis").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return start_path.resolve()
 
 
 class OutputManager:
@@ -42,7 +57,7 @@ class OutputManager:
     - Run history and comparison
     """
     
-    def __init__(self, city_name: str, base_path: str = "data/cities"):
+    def __init__(self, city_name: str, base_path: Union[str, Path] = "data/cities"):
         """
         Initialize OutputManager for a city.
         
@@ -52,7 +67,11 @@ class OutputManager:
         """
         self.city_name = city_name.lower()
         self.city_display = city_name.title()
-        self.base_path = Path(base_path)
+        base_path = Path(base_path)
+        if not base_path.is_absolute():
+            project_root = _find_project_root(Path(__file__).parent)
+            base_path = project_root / base_path
+        self.base_path = base_path
         self.city_path = self.base_path / self.city_name
         
         # Standard directories

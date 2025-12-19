@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.2.0] - 2025-12-19
+
+### Added
+- **PNG image export**: `export_image(result)` for a shareable summary.
+- **Classifier selection** end-to-end: `classifier="consensus"|"kmeans"|"spectral"` (with band checks).
+- **Maintainer docs**: architecture + maintenance guides in `docs/`.
+- **GitHub community scaffolding**: issue templates, PR template, CONTRIBUTING, SECURITY.
+- **CI smoke test**: quick offline analyze run after pytest.
+
+### Changed
+- Notebook is the recommended "golden path" in docs.
+- Output provenance now records key run parameters (classifier, bands, dates/cloud cover where applicable).
+
+### Fixed
+- Path resolution and `.gitignore` hygiene (avoid ignoring source code; ignore local caches).
+- Tests emit no pytest-return warnings; avoids divide-by-zero warning in consensus heuristics.
+
 ## [2.1.0] - 2025-12-19
 
 ### Added

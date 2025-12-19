@@ -1,28 +1,36 @@
 # 🛰️ Satellite City Analyzer
 
-**Classify land cover from Sentinel-2 satellite imagery in one command.**
+**Notebook-first land cover analysis from Sentinel-2 imagery.**
+
+Open and run the notebook:
+
+- [notebooks/city_analysis.ipynb](notebooks/city_analysis.ipynb)
+
+Alternative entry points:
 
 ```bash
-python scripts/analyze_city.py --city Milan
+python scripts/analyze_city.py --city Milan --export image report
 ```
 
 ```python
 from satellite_analysis import analyze
 result = analyze("Milan")
+print(result.summary())
 ```
 
 ---
 
 ## Features
 
+- **Notebook-first UX**: one place to configure + run + visualize
 - **One-line API**: `analyze("city")` does everything
 - **Batch processing**: Analyze multiple cities at once
 - **Change detection**: Compare land cover across time periods
-- **Multiple exports**: GeoTIFF, HTML reports, JSON
+- **Multiple exports**: GeoTIFF, HTML reports, JSON, PNG image
 - **CLI & Python API**: Use from terminal or code
 - **REST API**: FastAPI server for integrations
 
-**Land Cover Classes**: Water, Vegetation, Urban, Bare Soil, Shadows, Bright Surfaces
+**Land Cover Classes**: Water, Vegetation, Bare Soil, Urban, Bright Surfaces, Shadows/Mixed
 
 ---
 
@@ -37,7 +45,14 @@ python -m venv .venv
 # source .venv/bin/activate # Linux/Mac
 
 pip install -e .
+
+# Notebook dependencies (recommended)
+pip install -e ".[notebooks]"
 ```
+
+Notes:
+
+- Package name is `satellite-image-analysis`, import name is `satellite_analysis`.
 
 For REST API:
 ```bash
@@ -48,10 +63,18 @@ pip install -e ".[api]"
 
 ## Quick Start
 
+### Notebook (recommended)
+
+1) Install deps (above)
+
+2) Open the notebook and run top-to-bottom:
+
+- [notebooks/city_analysis.ipynb](notebooks/city_analysis.ipynb)
+
 ### Python API
 
 ```python
-from satellite_analysis import analyze, export_report, export_geotiff
+from satellite_analysis import analyze, export_report, export_geotiff, export_image
 
 # Analyze
 result = analyze("Florence", max_size=2000)
@@ -60,6 +83,7 @@ print(f"Confidence: {result.avg_confidence:.1%}")
 # Export
 export_geotiff(result)
 export_report(result, language="en")
+export_image(result)  # writes a shareable PNG summary
 ```
 
 ### Command Line
@@ -69,7 +93,7 @@ export_report(result, language="en")
 python scripts/analyze_city.py --city Milan
 
 # Batch + export
-python scripts/analyze_city.py --cities Milan Rome Florence --export report geotiff
+python scripts/analyze_city.py --cities Milan Rome Florence --export report geotiff image
 
 # Change detection
 python scripts/analyze_city.py --city Milan --compare 2023-06 2024-06
@@ -84,8 +108,11 @@ python scripts/api_server.py  # Starts on localhost:8000
 ```bash
 curl -X POST "http://localhost:8000/analyze?city=Milan&max_size=1000"
 ```
-
 ---
+## Maintainers
+
+- Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Maintenance playbook: [docs/MAINTENANCE_GUIDE.md](docs/MAINTENANCE_GUIDE.md)
 
 ## Configuration
 
@@ -99,6 +126,16 @@ sentinel:
 
 ---
 
+## Troubleshooting (fast)
+
+- **Auth / downloads fail**: verify `config/config.yaml` (start from `config/config.yaml.example`).
+- **No products found**: widen date range or increase `MAX_CLOUD_COVER`.
+- **Too slow**: set `MAX_SIZE=500–1500` and try `CLASSIFIER="kmeans"`.
+- **Disk usage**: downloads can be large; delete `data/cities/<city>/previews/` and old `runs/`.
+- **Notebook path issues**: run from repo root; paths resolve from project root.
+
+---
+
 ## Output
 
 Results saved to `data/cities/{city}/runs/{timestamp}/`:
@@ -109,6 +146,7 @@ Results saved to `data/cities/{city}/runs/{timestamp}/`:
 ├── run_info.json        # Metadata
 ├── {city}_classification.tif  # GeoTIFF (if exported)
 └── {city}_report.html         # HTML report (if exported)
+└── {city}_summary.png         # PNG image summary (if exported)
 ```
 
 ---
@@ -128,6 +166,7 @@ from satellite_analysis import (
     # Exports
     export_geotiff,    # GIS-ready raster
     export_report,     # HTML report (en/it)
+    export_image,      # PNG image summary
     export_json,       # Machine-readable
     
     # Types

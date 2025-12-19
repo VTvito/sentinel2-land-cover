@@ -33,7 +33,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
 from satellite_analysis import analyze, analyze_batch, compare
-from satellite_analysis import export_geotiff, export_report, export_change_report
+from satellite_analysis import export_geotiff, export_report, export_change_report, export_image
 
 
 def main():
@@ -89,8 +89,8 @@ Examples:
     parser.add_argument(
         "--export",
         nargs="+",
-        choices=["geotiff", "report", "json", "all"],
-        help="Export formats: geotiff, report (HTML), json, or all"
+        choices=["geotiff", "report", "json", "image", "all"],
+        help="Export formats: geotiff, report (HTML), json, image (PNG), or all"
     )
     parser.add_argument(
         "--output-dir",
@@ -127,7 +127,7 @@ Examples:
     exports = set()
     if args.export:
         if "all" in args.export:
-            exports = {"geotiff", "report", "json"}
+            exports = {"geotiff", "report", "json", "image"}
         else:
             exports = set(args.export)
     
@@ -272,6 +272,10 @@ def export_results(result, exports, language, output_dir):
         from satellite_analysis import export_json
         path = export_json(result, base_dir / f"{base_name}_results.json")
         print(f"  Exported JSON: {path}")
+    
+        if "image" in exports:
+            path = export_image(result, base_dir / f"{base_name}_summary.png")
+            print(f"  Exported Image: {path}")
 
 
 def print_result_summary(result):

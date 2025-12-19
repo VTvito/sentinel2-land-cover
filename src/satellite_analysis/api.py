@@ -40,6 +40,7 @@ def analyze(
     max_size: Optional[int] = None,
     classifier: Literal["kmeans", "spectral", "consensus"] = "consensus",
     n_clusters: int = 6,
+    crop_to_city: bool = True,
     
     # Output options
     save_preview: bool = True,
@@ -71,6 +72,7 @@ def analyze(
         max_size: Max pixels per dimension (None = full resolution)
         classifier: Classification method ("kmeans", "spectral", "consensus")
         n_clusters: Number of clusters (default: 6)
+        crop_to_city: Crop image to city bounding box (default: True)
         
         save_preview: Save PNG preview (default: True)
         output_dir: Custom output directory (default: data/cities/{city}/latest)
@@ -131,12 +133,20 @@ def analyze(
         project_root=config.project_root,
         max_size=max_size or 5000,
         n_clusters=n_clusters,
+        classifier=classifier,
     )
     
     # Run analysis
+    start_dt, end_dt = config.get_date_range()
     pipeline_result = pipeline.run(
         city=city,
+        download=True,
         max_size=max_size,
+        radius_km=radius_km,
+        crop_to_city=crop_to_city,
+        start_date=start_dt,
+        end_date=end_dt,
+        cloud_cover=cloud_cover,
     )
     
     execution_time = time.time() - start_time
@@ -159,6 +169,10 @@ def analyze(
         original_shape=tuple(pipeline_result.metadata.get('original_shape', pipeline_result.image_shape)),
         processed_shape=pipeline_result.image_shape,
         config_summary=config.to_dict(),
+        bbox=pipeline_result.metadata.get('bbox'),
+        city_center=pipeline_result.metadata.get('city_center'),
+        radius_km=pipeline_result.metadata.get('radius_km'),
+        cropped_to_city=pipeline_result.metadata.get('cropped_to_city', True),
     )
 
 
@@ -292,3 +306,13 @@ def export_json(
     """Export result as JSON. See exports.export_json for full docs."""
     from .exports import export_json as _export_json
     return _export_json(result, output_path)
+
+
+def export_image(
+    result: AnalysisResult,
+    output_path: Optional[Union[str, Path]] = None,
+    **kwargs,
+) -> Path:
+    """Export result as PNG image. See exports.export_image for full docs."""
+    from .exports import export_image as _export_image
+    return _export_image(result, output_path, **kwargs)

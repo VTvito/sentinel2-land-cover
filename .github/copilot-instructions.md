@@ -17,6 +17,7 @@ from satellite_analysis import (
     compare,           # Change detection
     export_geotiff,    # GIS export
     export_report,     # HTML report
+    export_image,      # PNG image summary
     export_json,       # Machine-readable
 )
 
@@ -49,7 +50,7 @@ path = Path("data/cities/milan")
 ## Land Cover Classes
 
 ```python
-{0: "Water", 1: "Vegetation", 2: "Urban", 3: "Bare Soil", 4: "Shadows/Mixed", 5: "Bright Surfaces"}
+{0: "Water", 1: "Vegetation", 2: "Bare Soil", 3: "Urban", 4: "Bright Surfaces", 5: "Shadows/Mixed"}
 ```
 
 ## Testing

@@ -8,7 +8,7 @@ data/previews/
 data/cities/
 
 # Clustering output files (temporary/analysis results)
-**/clustering/
+data/**/clustering/
 *.npy
 *_labels*.png
 *_comparison.png
@@ -22,11 +22,25 @@ venv/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
+# Jupyter runtime artifacts
+notebooks/config/
+
 # Python cache files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Test + coverage caches
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Type-checker / linter caches
+.mypy_cache/
+.ruff_cache/
+.pyright/
 
 # Virtual environment
 venv/
@@ -49,17 +63,25 @@ ehthumbs.db
 Thumbs.db
 
 # Large data files (satellite imagery)
-*.zip
-*.tiff
-*.tif
-*.jp2
-*.SAFE/
+data/**/*.zip
+data/**/*.tiff
+data/**/*.tif
+data/**/*.jp2
+data/**/*.SAFE/
+
+# Keep demo sample data tracked
+!data/demo/**/*.tif
+!data/demo/**/*.tiff
 
 # Credentials (if any)
 #*login*.py
 #credentials.txt
-#.env
+/.env
+.env.*
 config/config.yaml
+
+# Local caches
+config/area_cache.json
 
 # Private documentation (internal use only, do NOT commit)
 private_docs/

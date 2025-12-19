@@ -37,8 +37,7 @@ def test_city_selection():
     
     assert error_lon < 0.001 and error_lat < 0.001, "BBox non centrato!"
     print("  ✅ BBox correttamente centrato")
-    
-    return True
+    return None
 
 
 def test_coordinates_selection():
@@ -59,21 +58,15 @@ def test_coordinates_selection():
     
     assert info['area_km2'] > 0, "Area non valida!"
     print("✅ Selezione da coordinate OK")
-    
-    return True
+    return None
 
 
 if __name__ == "__main__":
     print("\n🧪 TEST SUITE: Area Selection\n")
-    
-    success = True
-    success &= test_city_selection()
-    success &= test_coordinates_selection()
-    
-    if success:
-        print("\n" + "=" * 60)
-        print("✅ TUTTI I TEST COMPLETATI CON SUCCESSO")
-        print("=" * 60 + "\n")
-    else:
-        print("\n❌ Alcuni test falliti")
-        sys.exit(1)
+
+    test_city_selection()
+    test_coordinates_selection()
+
+    print("\n" + "=" * 60)
+    print("✅ TUTTI I TEST COMPLETATI CON SUCCESSO")
+    print("=" * 60 + "\n")

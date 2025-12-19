@@ -1,0 +1,45 @@
+name: Download/Auth problem
+description: Problems with Copernicus credentials, catalog search, or downloads
+title: "auth/download: "
+labels: [download, help wanted]
+body:
+  - type: markdown
+    attributes:
+      value: "Most issues here are credentials/config or filters (date/cloud). Please include the exact error message."
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config used (redact secrets)
+      description: Paste relevant config fields from config/config.yaml with secrets removed.
+      render: yaml
+  - type: input
+    id: dates
+    attributes:
+      label: Date range
+      placeholder: "2025-12-01 → 2025-12-15"
+  - type: input
+    id: cloud
+    attributes:
+      label: Cloud cover max
+      placeholder: "15"
+  - type: dropdown
+    id: entrypoint
+    attributes:
+      label: Where did it fail?
+      options:
+        - Notebook search cell (products)
+        - Notebook analyze cell
+        - CLI
+        - Python API
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Windows/Linux, Python version, network/proxy info (if relevant)"

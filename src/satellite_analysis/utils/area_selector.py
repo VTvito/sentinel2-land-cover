@@ -6,6 +6,24 @@ import json
 from pathlib import Path
 
 
+def _find_project_root(start_path: Path) -> Path:
+    """Find project root by looking for pyproject.toml.
+
+    Keeps path resolution stable when called from notebooks or APIs.
+    """
+    current = start_path.resolve()
+    for _ in range(10):
+        if (current / "pyproject.toml").exists():
+            return current
+        if (current / "src" / "satellite_analysis").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return start_path.resolve()
+
+
 class AreaSelector:
     """Helper for selecting geographic areas by city name or custom coordinates.
     
@@ -30,7 +48,11 @@ class AreaSelector:
         Args:
             cache_file: Path to cache file for storing custom areas
         """
-        self.cache_file = Path(cache_file)
+        cache_path = Path(cache_file)
+        if not cache_path.is_absolute():
+            project_root = _find_project_root(Path(__file__).parent)
+            cache_path = project_root / cache_path
+        self.cache_file = cache_path
         self.cache = self._load_cache()
     
     def select_by_city(

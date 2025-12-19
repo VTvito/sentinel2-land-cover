@@ -41,8 +41,7 @@ def test_classifier_basic():
     print("✅ Basic test passed")
     print(f"   Classes found: {list(stats.keys())}")
     print(f"   Label range: {labels.min()}-{labels.max()}")
-    
-    return True
+    return None
 
 
 def test_water_detection():
@@ -73,8 +72,7 @@ def test_water_detection():
     print(f"✅ Water detection test passed")
     print(f"   MNDWI mean: {indices['MNDWI'].mean():.3f}")
     print(f"   Water pixels: {water_percentage:.1f}%")
-    
-    return True
+    return None
 
 
 def test_vegetation_detection():
@@ -104,8 +102,7 @@ def test_vegetation_detection():
     print(f"✅ Vegetation detection test passed")
     print(f"   NDVI mean: {indices['NDVI'].mean():.3f}")
     print(f"   Vegetation pixels: {veg_percentage:.1f}%")
-    
-    return True
+    return None
 
 
 def test_custom_thresholds():
@@ -132,8 +129,7 @@ def test_custom_thresholds():
     
     print(f"✅ Custom thresholds test passed")
     print(f"   Custom thresholds applied: {custom_thresholds}")
-    
-    return True
+    return None
 
 
 if __name__ == '__main__':

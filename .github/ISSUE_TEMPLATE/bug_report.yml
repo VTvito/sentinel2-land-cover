@@ -1,0 +1,51 @@
+name: Bug report
+description: Something isn't working as expected
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for reporting! Please keep it concise and include the essentials."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, and what did you expect?
+      placeholder: "I ran the notebook Cell 5 with CITY=... and got ..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: "v2.1.0 or commit sha"
+  - type: dropdown
+    id: entrypoint
+    attributes:
+      label: Entry point
+      options:
+        - Notebook (notebooks/city_analysis.ipynb)
+        - Python API (analyze)
+        - CLI (scripts/analyze_city.py)
+        - API server (scripts/api_server.py)
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Python version, install method
+      placeholder: "Windows 11, Python 3.12, pip install -e ."

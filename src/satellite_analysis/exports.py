@@ -24,10 +24,10 @@ import json
 LAND_COVER_CLASSES = {
     0: {"name": "Water", "color": "#0077be", "rgb": (0, 119, 190)},
     1: {"name": "Vegetation", "color": "#2d8532", "rgb": (45, 133, 50)},
-    2: {"name": "Urban", "color": "#d62728", "rgb": (214, 39, 40)},
-    3: {"name": "Bare Soil", "color": "#8b4513", "rgb": (139, 69, 19)},
-    4: {"name": "Shadows/Mixed", "color": "#666666", "rgb": (102, 102, 102)},
-    5: {"name": "Bright Surfaces", "color": "#ffd700", "rgb": (255, 215, 0)},
+    2: {"name": "Bare Soil", "color": "#8b4513", "rgb": (139, 69, 19)},
+    3: {"name": "Urban", "color": "#d62728", "rgb": (214, 39, 40)},
+    4: {"name": "Bright Surfaces", "color": "#ffd700", "rgb": (255, 215, 0)},
+    5: {"name": "Shadows/Mixed", "color": "#666666", "rgb": (102, 102, 102)},
 }
 
 
@@ -261,6 +261,121 @@ def export_report(
     # Write HTML
     output_path.write_text(html, encoding='utf-8')
     
+    return output_path
+
+
+def export_image(
+    result: "AnalysisResult",
+    output_path: Optional[Union[str, Path]] = None,
+    *,
+    title: Optional[str] = None,
+    include_confidence_map: bool = False,
+    dpi: int = 150,
+) -> Path:
+    """Export a quick-look PNG image (classification + stats).
+
+    The image is intended for sharing in docs/issues/chats where an interactive
+    HTML report is too heavy.
+
+    Args:
+        result: AnalysisResult from analyze()
+        output_path: Output file path. If None, saves to result.output_dir
+        title: Optional image title
+        include_confidence_map: If True, includes a confidence heatmap panel
+        dpi: PNG resolution
+
+    Returns:
+        Path to the created PNG file
+    """
+    import matplotlib
+
+    # Ensure headless-safe rendering (e.g. CI, servers)
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import ListedColormap
+
+    if output_path is None:
+        output_path = result.output_dir / f"{result.city.lower()}_summary.png"
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if title is None:
+        title = f"Land Cover Summary - {result.city}"
+
+    labels = result.labels
+    confidence = result.confidence
+    distribution = result.class_distribution()
+
+    # Create colormap (ensure at least the canonical 0..5 classes exist)
+    max_class = int(max(labels.max(), 5))
+    colors = [
+        LAND_COVER_CLASSES.get(i, {"color": "#808080"})["color"]
+        for i in range(max_class + 1)
+    ]
+    cmap = ListedColormap(colors)
+
+    # Layout: map (left) + distribution + stats (right)
+    if include_confidence_map:
+        fig = plt.figure(figsize=(14, 8))
+        gs = fig.add_gridspec(2, 2, width_ratios=[2.2, 1.0], height_ratios=[1, 1])
+        ax_map = fig.add_subplot(gs[:, 0])
+        ax_dist = fig.add_subplot(gs[0, 1])
+        ax_stats = fig.add_subplot(gs[1, 1])
+    else:
+        fig = plt.figure(figsize=(14, 6))
+        gs = fig.add_gridspec(1, 3, width_ratios=[2.2, 1.0, 1.0])
+        ax_map = fig.add_subplot(gs[0, 0])
+        ax_dist = fig.add_subplot(gs[0, 1])
+        ax_stats = fig.add_subplot(gs[0, 2])
+
+    fig.suptitle(title, fontsize=16)
+
+    # Classification map
+    ax_map.imshow(labels, cmap=cmap, interpolation="nearest")
+    ax_map.set_title("Classification", fontsize=12)
+    ax_map.axis("off")
+
+    # Distribution bar chart (only classes present)
+    present = [(cls_id, data) for cls_id, data in sorted(distribution.items())]
+    cls_names = [LAND_COVER_CLASSES.get(cls_id, {"name": f"Class {cls_id}"})["name"] for cls_id, _ in present]
+    percents = [data["percentage"] for _, data in present]
+    bar_colors = [LAND_COVER_CLASSES.get(cls_id, {"color": "#808080"})["color"] for cls_id, _ in present]
+
+    ax_dist.barh(range(len(present)), percents, color=bar_colors)
+    ax_dist.set_yticks(range(len(present)), labels=cls_names)
+    ax_dist.invert_yaxis()
+    ax_dist.set_xlim(0, 100)
+    ax_dist.set_xlabel("%")
+    ax_dist.set_title("Land Cover Distribution", fontsize=12)
+    ax_dist.grid(axis="x", alpha=0.2)
+
+    # Stats panel
+    ax_stats.axis("off")
+    classifier = result.config_summary.get("classifier", "consensus")
+    lines = [
+        f"City: {result.city}",
+        f"Classifier: {classifier}",
+        f"Processed shape: {result.processed_shape[0]}×{result.processed_shape[1]}",
+        f"Average confidence: {result.avg_confidence:.1%}",
+        f"Total pixels: {result.total_pixels:,}",
+    ]
+    if "start_date" in result.config_summary and "end_date" in result.config_summary:
+        lines.insert(2, f"Date range: {result.config_summary.get('start_date')} → {result.config_summary.get('end_date')}")
+    ax_stats.text(0.02, 0.98, "\n".join(lines), va="top", ha="left", fontsize=11)
+
+    if include_confidence_map:
+        # Add confidence map as an inset inside the map axis (bottom-right)
+        inset = ax_map.inset_axes([0.62, 0.02, 0.36, 0.36])
+        im = inset.imshow(confidence, cmap="RdYlGn", vmin=0, vmax=1)
+        inset.set_title("Confidence", fontsize=10)
+        inset.axis("off")
+        cax = ax_map.inset_axes([0.62, 0.0, 0.36, 0.02])
+        fig.colorbar(im, cax=cax, orientation="horizontal")
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(output_path, format="png", dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+
     return output_path
 
 

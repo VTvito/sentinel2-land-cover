@@ -409,45 +409,66 @@ class ConsensusClassifier:
         nir = raster[:, :, band_indices['B08']].astype(np.float32)
         
         # NDVI (vegetation index)
-        ndvi = np.where(
-            (nir + red) != 0,
-            (nir - red) / (nir + red),
-            0
+        ndvi_denom = nir + red
+        ndvi = np.divide(
+            nir - red,
+            ndvi_denom,
+            out=np.zeros_like(ndvi_denom, dtype=np.float32),
+            where=ndvi_denom != 0,
         )
         
         # NDWI (water index using green and NIR)
-        ndwi = np.where(
-            (green + nir) != 0,
-            (green - nir) / (green + nir),
-            0
+        ndwi_denom = green + nir
+        ndwi = np.divide(
+            green - nir,
+            ndwi_denom,
+            out=np.zeros_like(ndwi_denom, dtype=np.float32),
+            where=ndwi_denom != 0,
         )
         
         # Simple urban index (red/NIR ratio)
-        urban_idx = np.where(nir != 0, red / nir, 0)
+        urban_idx = np.divide(
+            red,
+            nir,
+            out=np.zeros_like(nir, dtype=np.float32),
+            where=nir != 0,
+        )
+        
+        # Brightness (average reflectance)
+        brightness = (red + green + blue) / 3
         
         # Initialize with SHADOWS_MIXED (5)
         labels = np.full(ndvi.shape, 5, dtype=np.uint8)
         
         # Classification rules (simplified without SWIR)
+        # Order matters! Later rules can override earlier ones
         
-        # WATER: high NDWI
-        water_mask = ndwi > 0.3
+        # SHADOWS: very low brightness (true shadows/dark areas)
+        shadow_mask = brightness < 300
+        labels[shadow_mask] = 5
+        
+        # WATER: high NDWI and low NIR
+        water_mask = (ndwi > 0.2) & (nir < 1500)
         labels[water_mask] = 0
         
-        # VEGETATION: high NDVI
-        veg_mask = (ndvi > 0.4) & ~water_mask
+        # VEGETATION: high NDVI (clear vegetation signal)
+        veg_mask = (ndvi > 0.35) & ~water_mask & ~shadow_mask
         labels[veg_mask] = 1
         
-        # BARE_SOIL: low NDVI, moderate brightness
-        brightness = (red + green + blue) / 3
-        soil_mask = (ndvi < 0.2) & (ndvi > -0.1) & (brightness > 500) & ~water_mask
+        # BARE_SOIL: low NDVI, moderate-high brightness, brownish
+        soil_mask = (ndvi < 0.2) & (ndvi > -0.1) & (brightness > 800) & (brightness < 3000) & ~water_mask
         labels[soil_mask] = 2
         
-        # URBAN: low NDVI, high red/NIR ratio
-        urban_mask = (ndvi < 0.3) & (urban_idx > 0.6) & ~water_mask & ~soil_mask
+        # URBAN: low-moderate NDVI, moderate brightness, not water/veg
+        # Urban areas have NDVI typically 0.1-0.3 and moderate brightness
+        urban_mask = (
+            (ndvi >= -0.1) & (ndvi < 0.35) &  # Low NDVI
+            (brightness > 500) & (brightness < 4000) &  # Moderate brightness
+            ~water_mask & ~shadow_mask & ~veg_mask
+        )
         labels[urban_mask] = 3
         
-        # BRIGHT_SURFACES: very high brightness, low NDVI
+        # BRIGHT_SURFACES: very high brightness (concrete, roofs, sand)
         bright_mask = (brightness > 2000) & (ndvi < 0.1) & ~water_mask
         labels[bright_mask] = 4
         

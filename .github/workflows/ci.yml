@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +32,10 @@ jobs:
       - name: Run tests
         run: |
           python -m pytest tests/ -v --tb=short
+
+      - name: Smoke test (no network)
+        run: |
+          python -c "from satellite_analysis import analyze; print(analyze('Milan', max_size=200, crop_to_city=True, classifier='kmeans').summary())"
 
   lint:
     runs-on: ubuntu-latest

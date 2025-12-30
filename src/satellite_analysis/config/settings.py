@@ -1,4 +1,11 @@
-"""Configuration settings for the satellite analysis pipeline."""
+"""Legacy configuration settings (yaml-based).
+
+For new code, prefer `satellite_analysis.core.AnalysisConfig` which is
+the runtime configuration used by `analyze()` and `CompletePipeline`.
+
+This module is kept for backward compatibility with scripts that load
+config.yaml directly.
+"""
 
 from dataclasses import dataclass, field
 from pathlib import Path

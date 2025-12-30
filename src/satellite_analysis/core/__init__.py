@@ -7,6 +7,7 @@ from .types import (
     AnalysisResult,
     ClassifierType,
 )
+from .ports import ClassifierPort, AreaSelectorPort, OutputManagerPort
 
 __all__ = [
     "AnalysisConfig",
@@ -14,4 +15,7 @@ __all__ = [
     "ClassificationResult", 
     "AnalysisResult",
     "ClassifierType",
+    "ClassifierPort",
+    "AreaSelectorPort",
+    "OutputManagerPort",
 ]

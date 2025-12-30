@@ -1,21 +1,42 @@
 # Changelog
 
-## [2.2.0] - 2025-12-19
+## [2.3.0] - 2025-12-30
 
 ### Added
-- **PNG image export**: `export_image(result)` for a shareable summary.
-- **Classifier selection** end-to-end: `classifier="consensus"|"kmeans"|"spectral"` (with band checks).
-- **Maintainer docs**: architecture + maintenance guides in `docs/`.
-- **GitHub community scaffolding**: issue templates, PR template, CONTRIBUTING, SECURITY.
-- **CI smoke test**: quick offline analyze run after pytest.
+- **`raw_clusters` mode**: Keep distinct cluster IDs (0 to N-1) without semantic mapping. Essential for KMeans visualization where clusters shouldn't collapse to semantic classes.
+- **`export_rgb()` function**: Generate publication-quality RGB True Color, False Color Composite (NIR-R-G), and NDVI visualizations at 300 DPI.
+- **RGB GeoTIFF export**: Georeferenced RGB True Color for GIS integration.
 
 ### Changed
-- Notebook is the recommended "golden path" in docs.
-- Output provenance now records key run parameters (classifier, bands, dates/cloud cover where applicable).
+- **Improved color palette**: High-contrast colors for better visualization. Urban changed from gray (#808080) to crimson (#DC143C).
+- **Notebook updated**: Configuration cell now includes `RAW_CLUSTERS` parameter; visualization cell auto-detects mode and uses distinct palettes.
 
 ### Fixed
-- Path resolution and `.gitignore` hygiene (avoid ignoring source code; ignore local caches).
-- Tests emit no pytest-return warnings; avoids divide-by-zero warning in consensus heuristics.
+- **KMeans cluster collapse bug**: Fixed issue where 6 clusters would collapse to 3 semantic classes due to NDVI/NDWI threshold mapping. Use `raw_clusters=True` to preserve all clusters.
+
+---
+
+## [2.2.0] - 2025-12-30
+
+### Added
+- **Classifier registry**: Strategy pattern with pluggable adapters (`registry.py`).
+- **Ports/contracts**: `ClassifierPort`, `AreaSelectorPort`, `OutputManagerPort` in `core/ports.py`.
+- **ProjectPaths**: Centralized path resolution from project root (`utils/project_paths.py`).
+- **Pipeline options**: `resample_method` (bilinear/cubic), `crop_fail_raises` (strict cropping).
+- **py.typed marker**: PEP 561 typed package support.
+- **PNG image export**: `export_image(result)` for shareable summaries.
+- **Test infrastructure**: `conftest.py` with shared fixtures, pytest markers (slow, integration, network).
+- **New test suites**: `test_registry.py`, `test_api.py`, `test_paths.py` covering new architecture.
+
+### Changed
+- Version synced across `__init__.py` and `pyproject.toml`.
+- Documentation trimmed (~60% reduction) for lower maintenance overhead.
+- Legacy `Config` (yaml-based) clearly marked; prefer `AnalysisConfig` for runtime.
+- Test count: **85 tests** (71 fast unit tests + 14 integration tests).
+
+### Fixed
+- Removed TODO comments; clarified date-specific data notes.
+- Exports `Classifier`, `ProjectPaths` from public API.
 
 ## [2.1.0] - 2025-12-19
 

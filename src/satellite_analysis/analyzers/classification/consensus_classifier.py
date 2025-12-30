@@ -4,6 +4,9 @@ Consensus Classifier for combining multiple classification methods.
 Combines K-Means clustering with Spectral Indices classification
 to produce a more robust land cover classification with confidence scoring.
 
+Based on methodology from Hejmanowska & Kramarczyk (2023):
+"Agriculture Land Cover Identification Using One-Shot Airborne Hyperspectral Images"
+
 Classes:
     0: WATER
     1: VEGETATION (forest + grassland)
@@ -20,7 +23,7 @@ from collections import Counter
 
 from satellite_analysis.analyzers.clustering import KMeansPlusPlusClusterer
 from satellite_analysis.analyzers.classification import SpectralIndicesClassifier
-from satellite_analysis.preprocessing.normalization import min_max_scale
+from satellite_analysis.preprocessing.normalization import standard_scale
 from satellite_analysis.preprocessing.reshape import reshape_image_to_table, reshape_table_to_image
 
 logger = logging.getLogger(__name__)
@@ -249,9 +252,9 @@ class ConsensusClassifier:
         kmeans_bands = ['B02', 'B03', 'B04', 'B08']
         stack = np.stack([raster[:, :, band_indices[b]] for b in kmeans_bands], axis=-1)
         
-        # Reshape to table
+        # Reshape to table and standardize (z-score normalization as per paper)
         data = reshape_image_to_table(stack)
-        data_scaled = min_max_scale(data)
+        data_scaled = standard_scale(data)  # StandardScaler: (x - mean) / std
         
         # Sample for training
         n_total = len(data_scaled)

@@ -41,6 +41,7 @@ def analyze(
     classifier: Literal["kmeans", "spectral", "consensus"] = "consensus",
     n_clusters: int = 6,
     crop_to_city: bool = True,
+    raw_clusters: bool = False,
     
     # Output options
     save_preview: bool = True,
@@ -51,6 +52,8 @@ def analyze(
     
     # Advanced
     project_root: Optional[Path] = None,
+    resample_method: Literal["bilinear", "cubic"] = "bilinear",
+    crop_fail_raises: bool = True,
 ) -> AnalysisResult:
     """Analyze satellite imagery for a city.
     
@@ -73,6 +76,9 @@ def analyze(
         classifier: Classification method ("kmeans", "spectral", "consensus")
         n_clusters: Number of clusters (default: 6)
         crop_to_city: Crop image to city bounding box (default: True)
+        raw_clusters: If True and classifier="kmeans", returns raw cluster IDs
+                      (0 to n_clusters-1) without mapping to land cover classes.
+                      Useful for exploratory analysis with distinct colors per cluster.
         
         save_preview: Save PNG preview (default: True)
         output_dir: Custom output directory (default: data/cities/{city}/latest)
@@ -92,6 +98,9 @@ def analyze(
         >>> result = analyze("Florence")
         >>> print(f"Found {len(result.classes)} land cover types")
         >>> print(f"Average confidence: {result.avg_confidence:.1%}")
+        
+        >>> # Raw clusters for exploratory analysis
+        >>> result = analyze("Milan", classifier="kmeans", n_clusters=8, raw_clusters=True)
     """
     from datetime import datetime
     import time
@@ -134,6 +143,9 @@ def analyze(
         max_size=max_size or 5000,
         n_clusters=n_clusters,
         classifier=classifier,
+        resample_method=resample_method,
+        crop_fail_raises=crop_fail_raises,
+        raw_clusters=raw_clusters,
     )
     
     # Run analysis

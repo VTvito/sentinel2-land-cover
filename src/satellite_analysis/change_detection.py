@@ -180,9 +180,9 @@ def compare(
     # Analyze both periods
     progress(f"Analyzing {city} for {date_before_str}...")
     
-    # For now, we use existing data (future: download specific dates)
-    # This is a simplified version that compares the same data twice
-    # TODO: Implement proper date-specific data retrieval
+    # Note: date-specific data retrieval requires downloading imagery for each period.
+    # Current implementation reuses existing data; for true temporal comparison,
+    # download data for both date ranges via analyze(..., start_date=..., end_date=...).
     
     result_before = analyze(
         city,

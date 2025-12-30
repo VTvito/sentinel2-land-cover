@@ -13,6 +13,7 @@ from satellite_analysis.utils.geospatial import (
 from satellite_analysis.utils.quick_preview import QuickPreview
 from satellite_analysis.utils.area_selector import AreaSelector, quick_select
 from satellite_analysis.utils.output_manager import OutputManager, RunContext, get_output_manager
+from satellite_analysis.utils.project_paths import ProjectPaths
 
 __all__ = [
     "get_location",
@@ -29,4 +30,5 @@ __all__ = [
     "OutputManager",
     "RunContext",
     "get_output_manager",
+    "ProjectPaths",
 ]

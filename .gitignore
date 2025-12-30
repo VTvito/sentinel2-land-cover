@@ -7,6 +7,13 @@ data/annotations/
 data/previews/
 data/cities/
 
+# UV lockfile (regenerate with uv)
+uv.lock
+
+# Private notes (not for commit)
+NOTES_PRIVATE.md
+*_PRIVATE.md
+
 # Clustering output files (temporary/analysis results)
 data/**/clustering/
 *.npy

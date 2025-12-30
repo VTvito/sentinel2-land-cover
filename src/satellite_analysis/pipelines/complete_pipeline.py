@@ -17,7 +17,9 @@ from datetime import datetime, date, timedelta
 import logging
 
 from satellite_analysis.utils import AreaSelector, OutputManager
-from satellite_analysis.analyzers.classification import ConsensusClassifier
+from satellite_analysis.utils.project_paths import ProjectPaths
+from satellite_analysis.analyzers.classification.registry import get_classifier, Classifier
+from satellite_analysis.core.ports import ClassifierPort, AreaSelectorPort, OutputManagerPort
 from satellite_analysis.pipelines.download_pipeline import DownloadPipeline
 from satellite_analysis.preprocessors.band_extractor import BandExtractor
 
@@ -83,6 +85,10 @@ class CompletePipeline:
         n_clusters: int = 6,
         project_root: Optional[Path] = None,
         classifier: Literal["kmeans", "spectral", "consensus"] = "consensus",
+        *,
+        resample_method: Literal["bilinear", "cubic"] = "bilinear",
+        crop_fail_raises: bool = True,
+        raw_clusters: bool = False,
     ):
         """Initialize pipeline.
         
@@ -91,6 +97,7 @@ class CompletePipeline:
             max_size: Maximum image dimension (auto-downsample if larger)
             n_clusters: Number of clusters for K-Means
             project_root: Project root directory (auto-detected if None)
+            raw_clusters: If True, kmeans returns raw cluster IDs without mapping
         """
         # Auto-detect project root if not provided
         if project_root is None:
@@ -98,22 +105,29 @@ class CompletePipeline:
             self.project_root = Path(__file__).parent.parent.parent.parent.resolve()
         else:
             self.project_root = Path(project_root).resolve()
-        
-        self.config_path = self.project_root / config_path
+
+        self.paths = ProjectPaths(self.project_root)
+        self.config_path = self.paths.config(config_path.replace("config/", "")) if config_path.startswith("config/") else self.paths.resolve(config_path)
         self.max_size = max_size
         self.n_clusters = n_clusters
 
         if classifier not in {"kmeans", "spectral", "consensus"}:
             raise ValueError(f"Unknown classifier: {classifier}")
         self.classifier_type: Literal["kmeans", "spectral", "consensus"] = classifier
-        
+        self.resample_method = resample_method
+        self.crop_fail_raises = crop_fail_raises
+        self.raw_clusters = raw_clusters
+
         # Initialize components
-        self.area_selector = AreaSelector()
-        self._consensus_classifier = ConsensusClassifier(n_clusters=n_clusters)
+        self.area_selector: AreaSelectorPort = AreaSelector()
+        self.classifier: ClassifierPort = get_classifier(
+            classifier, n_clusters=n_clusters, raw_clusters=raw_clusters
+        )
+        self.output_manager_factory = lambda city: OutputManager(city, base_path=str(self.paths.data("cities")))
     
     def _resolve_path(self, *parts: str) -> Path:
         """Resolve path relative to project root."""
-        return self.project_root / Path(*parts)
+        return self.paths.resolve(*parts)
         
     @classmethod
     def from_config(cls, config_path: str) -> 'CompletePipeline':
@@ -148,7 +162,7 @@ class CompletePipeline:
         
         logger.info(f"Starting analysis for {city}")
 
-        bands_needed = self._bands_needed_for_classifier()
+        bands_needed = self.classifier.required_bands()
         
         # Step 1: Get city bbox for cropping
         bbox, city_metadata = self.area_selector.select_by_city(city, radius_km=radius_km)
@@ -192,8 +206,8 @@ class CompletePipeline:
         labels, confidence, stats = self._classify(bands)
         
         # Step 7: Save results (use absolute path for base_path)
-        base_path = str(self._resolve_path("data", "cities"))
-        output_manager = OutputManager(city, base_path=base_path)
+        base_path = str(self.paths.data("cities"))
+        output_manager: OutputManagerPort = self.output_manager_factory(city)
         
         def _to_iso(dt: Optional[Union[str, date, datetime]]) -> Optional[str]:
             if dt is None:
@@ -278,10 +292,9 @@ class CompletePipeline:
         return True
 
     def _bands_needed_for_classifier(self) -> List[str]:
-        if self.classifier_type == "spectral":
-            return ["B02", "B03", "B04", "B08", "B11", "B12"]
-        return ["B02", "B03", "B04", "B08"]
-    
+        # Deprecated: kept for backward compatibility if used externally.
+        return self.classifier.required_bands()
+
     def _download_data(
         self,
         city: str,
@@ -343,6 +356,7 @@ class CompletePipeline:
         bands_dir.mkdir(parents=True, exist_ok=True)
         
         extractor = BandExtractor(output_dir=str(bands_dir))
+        needs_swir = any(b in {"B11", "B12"} for b in self.classifier.required_bands())
         for product_file in result.downloaded_files:
             # Always extract the 10m core bands.
             extractor.extract_bands(
@@ -352,7 +366,7 @@ class CompletePipeline:
             )
 
             # Spectral mode requires SWIR bands, which are 20m.
-            if self.classifier_type == "spectral":
+            if needs_swir:
                 extractor.extract_bands(
                     zip_path=str(product_file),
                     bands=['B11', 'B12'],
@@ -441,6 +455,7 @@ class CompletePipeline:
         from rasterio.enums import Resampling
 
         dst = np.empty(dst_shape, dtype=np.float32)
+        resampling = Resampling.bilinear if self.resample_method == "bilinear" else Resampling.cubic
         reproject(
             source=src_data,
             destination=dst,
@@ -448,7 +463,7 @@ class CompletePipeline:
             src_crs=src_crs,
             dst_transform=dst_transform,
             dst_crs=dst_crs,
-            resampling=Resampling.bilinear,
+            resampling=resampling,
         )
         return dst
     
@@ -517,6 +532,10 @@ class CompletePipeline:
                     transforms[band_name] = out_transform
                     
                 except Exception as e:
+                    if self.crop_fail_raises:
+                        raise RuntimeError(
+                            f"Crop failed for {band_name} with bbox {bbox}: {e}"
+                        ) from e
                     logger.warning(f"Crop failed for {band_name}: {e}. Falling back to full image.")
                     bands[band_name] = src.read(1).astype(np.float32)
                     transforms[band_name] = src.transform
@@ -567,180 +586,5 @@ class CompletePipeline:
         return downsampled
     
     def _classify(self, bands: dict) -> Tuple[np.ndarray, np.ndarray, dict]:
-        """Run classification on loaded bands.
-        
-        Returns:
-            (labels, confidence, statistics)
-        """
-        if self.classifier_type == "consensus":
-            band_stack = np.stack([
-                bands['B02'],
-                bands['B03'],
-                bands['B04'],
-                bands['B08']
-            ], axis=-1)
-
-            band_indices = {
-                'B02': 0,  # Blue
-                'B03': 1,  # Green
-                'B04': 2,  # Red
-                'B08': 3   # NIR
-            }
-
-            labels, confidence, _, stats = self._consensus_classifier.classify(
-                band_stack,
-                band_indices,
-                has_swir=False,
-            )
-            return labels, confidence, stats
-
-        if self.classifier_type == "kmeans":
-            return self._classify_kmeans(bands)
-
-        if self.classifier_type == "spectral":
-            return self._classify_spectral(bands)
-
-        raise ValueError(f"Unknown classifier_type: {self.classifier_type}")
-
-    def _classify_kmeans(self, bands: dict) -> Tuple[np.ndarray, np.ndarray, dict]:
-        """KMeans++ segmentation + heuristic cluster labeling into canonical land-cover classes."""
-        from satellite_analysis.analyzers.clustering import KMeansPlusPlusClusterer
-        from satellite_analysis.preprocessing.reshape import reshape_image_to_table, reshape_table_to_image
-        from satellite_analysis.preprocessing.normalization import min_max_scale
-
-        b02 = bands['B02'].astype(np.float32)
-        b03 = bands['B03'].astype(np.float32)
-        b04 = bands['B04'].astype(np.float32)
-        b08 = bands['B08'].astype(np.float32)
-
-        eps = 1e-6
-        ndvi = (b08 - b04) / (b08 + b04 + eps)
-        ndwi = (b03 - b08) / (b03 + b08 + eps)
-        brightness = (b02 + b03 + b04) / 3.0
-
-        # Use global brightness quantiles for robust thresholds across different scaling.
-        p10 = float(np.nanpercentile(brightness, 10))
-        p90 = float(np.nanpercentile(brightness, 90))
-
-        stack = np.stack([b02, b03, b04, b08], axis=-1)
-        data = reshape_image_to_table(stack)
-        data_scaled = min_max_scale(data)
-
-        clusterer = KMeansPlusPlusClusterer(
-            n_clusters=self.n_clusters,
-            max_iterations=30,
-            random_state=42,
-        )
-        cluster_labels_1d = clusterer.fit_predict(data_scaled)
-        cluster_img = reshape_table_to_image(b02.shape, cluster_labels_1d).astype(np.int32)
-
-        # Label each cluster into the canonical 0-5 land cover classes.
-        cluster_to_class: Dict[int, int] = {}
-        cluster_to_conf: Dict[int, float] = {}
-
-        for k in range(self.n_clusters):
-            mask = cluster_img == k
-            if not np.any(mask):
-                cluster_to_class[k] = 5
-                cluster_to_conf[k] = 0.5
-                continue
-
-            mean_ndvi = float(np.nanmean(ndvi[mask]))
-            mean_ndwi = float(np.nanmean(ndwi[mask]))
-            mean_brightness = float(np.nanmean(brightness[mask]))
-            mean_rgb = float(np.nanmean(((b02 + b03 + b04) / 3.0)[mask]))
-            mean_nir = float(np.nanmean(b08[mask]))
-
-            # Water
-            if mean_ndwi > 0.25 and mean_ndvi < 0.2:
-                cluster_to_class[k] = 0
-                cluster_to_conf[k] = float(np.clip((mean_ndwi - 0.25) / 0.25 + 0.5, 0.5, 1.0))
-                continue
-
-            # Vegetation
-            if mean_ndvi > 0.5:
-                cluster_to_class[k] = 1
-                cluster_to_conf[k] = float(np.clip((mean_ndvi - 0.5) / 0.3 + 0.5, 0.5, 1.0))
-                continue
-
-            # Bright surfaces / shadows by brightness
-            if mean_brightness >= p90 and mean_ndvi < 0.2:
-                cluster_to_class[k] = 4
-                cluster_to_conf[k] = 0.7
-                continue
-            if mean_brightness <= p10:
-                cluster_to_class[k] = 5
-                cluster_to_conf[k] = 0.7
-                continue
-
-            # Built vs soil split (heuristic, 10m-only)
-            visible_to_nir = mean_rgb / (mean_nir + eps)
-            if mean_ndvi < 0.2 and visible_to_nir > 0.9:
-                cluster_to_class[k] = 3  # Urban
-                cluster_to_conf[k] = 0.6
-            else:
-                cluster_to_class[k] = 2  # Bare soil
-                cluster_to_conf[k] = 0.6
-
-        labels = np.zeros_like(cluster_img, dtype=np.uint8)
-        confidence = np.zeros_like(brightness, dtype=np.float32)
-        for k in range(self.n_clusters):
-            mask = cluster_img == k
-            labels[mask] = np.uint8(cluster_to_class[k])
-            confidence[mask] = np.float32(cluster_to_conf[k])
-
-        stats = self._basic_stats(labels, confidence)
-        stats['n_clusters'] = self.n_clusters
-        return labels, confidence, stats
-
-    def _classify_spectral(self, bands: dict) -> Tuple[np.ndarray, np.ndarray, dict]:
-        """Spectral indices classification (requires SWIR bands B11/B12)."""
-        from satellite_analysis.analyzers.classification import SpectralIndicesClassifier
-
-        for b in ('B11', 'B12'):
-            if b not in bands:
-                raise FileNotFoundError(
-                    f"Spectral classifier requires {b}. Ensure SWIR bands are available (download/extract)."
-                )
-
-        # Build raster stack and indices.
-        band_order = ['B02', 'B03', 'B04', 'B08', 'B11', 'B12']
-        band_stack = np.stack([bands[b].astype(np.float32) for b in band_order], axis=-1)
-        band_indices = {b: i for i, b in enumerate(band_order)}
-
-        spectral = SpectralIndicesClassifier()
-        spectral.validate_bands(band_indices, num_bands=band_stack.shape[-1])
-        spectral_labels, _ = spectral.classify_raster(band_stack, band_indices)
-
-        # Map spectral classes -> canonical land cover classes used by exports.
-        # Spectral: 0 Water, 1 Forest, 2 Grassland, 3 Urban, 4 Bare Soil, 5 Mixed
-        mapping = {
-            0: 0,
-            1: 1,
-            2: 1,
-            3: 3,
-            4: 2,
-            5: 5,
-        }
-        labels = np.vectorize(lambda x: mapping.get(int(x), 5), otypes=[np.uint8])(spectral_labels)
-
-        # Simple confidence: mixed is lower-confidence.
-        confidence = np.where(spectral_labels == 5, 0.5, 0.9).astype(np.float32)
-
-        stats = self._basic_stats(labels, confidence)
-        stats['note'] = 'spectral indices classifier (SWIR required)'
-        return labels, confidence, stats
-
-    def _basic_stats(self, labels: np.ndarray, confidence: np.ndarray) -> dict:
-        unique, counts = np.unique(labels, return_counts=True)
-        total = int(counts.sum())
-        return {
-            'avg_confidence': float(np.mean(confidence)),
-            'class_distribution': {
-                int(cls): {
-                    'count': int(count),
-                    'percentage': float(count / total * 100.0),
-                }
-                for cls, count in zip(unique, counts)
-            }
-        }
+        """Run classification on loaded bands using the configured classifier."""
+        return self.classifier.classify(bands)

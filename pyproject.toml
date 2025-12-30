@@ -1,6 +1,6 @@
 [project]
 name = "satellite-image-analysis"
-version = "2.2.0"
+version = "2.3.0"
 description = "Satellite land cover analysis - analyze('Florence') does everything"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -95,3 +95,13 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests requiring real data",
+    "network: marks tests as requiring network access",
+]

@@ -24,7 +24,7 @@ Export Results:
     >>> export_image(result, "summary.png")
 """
 
-__version__ = "2.1.0"
+__version__ = "2.3.0"
 __author__ = "Vito Delia"
 
 # Main API
@@ -52,6 +52,7 @@ from satellite_analysis.core.types import AnalysisResult, ClassificationResult
 # Export utilities (for advanced usage)
 from satellite_analysis.exports import (
     export_colored_geotiff,
+    export_rgb,
     LAND_COVER_CLASSES,
 )
 
@@ -70,6 +71,7 @@ __all__ = [
     # Exports
     "export_geotiff",
     "export_colored_geotiff",
+    "export_rgb",
     "export_report",
     "export_json",
     "export_image",

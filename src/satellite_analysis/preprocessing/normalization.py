@@ -56,3 +56,39 @@ def min_max_scale(ar: np.ndarray, min_val: float = 0.0, max_val: float = 1.0, ui
         res = (res * 255).astype(np.uint8)
     
     return res
+
+
+def standard_scale(ar: np.ndarray) -> np.ndarray:
+    """
+    Standardize features by removing the mean and scaling to unit variance.
+    
+    This is the StandardScaler approach used in the Hejmanowska & Kramarczyk paper.
+    z = (x - mean) / std
+    
+    Better for K-means clustering as it handles different band value ranges properly.
+    
+    Args:
+        ar: Input array of shape (n_samples, n_features)
+        
+    Returns:
+        Standardized array with same shape as input (mean=0, std=1 per feature)
+        
+    Example:
+        >>> data = np.array([[100, 200], [150, 250], [120, 220]])
+        >>> scaled = standard_scale(data)
+        >>> print(f"Mean: {scaled.mean(axis=0)}, Std: {scaled.std(axis=0)}")
+    """
+    res = np.zeros_like(ar, dtype=np.float32)
+    
+    for i in range(ar.shape[-1]):
+        feature = ar[..., i].astype(np.float32)
+        mean = feature.mean()
+        std = feature.std()
+        
+        if std > 0:
+            res[..., i] = (feature - mean) / std
+        else:
+            # Constant feature - set to zero
+            res[..., i] = 0.0
+    
+    return res

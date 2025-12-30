@@ -20,14 +20,15 @@ from datetime import datetime
 import numpy as np
 import json
 
-# Land cover class definitions
+# Land cover class definitions - High-contrast palette for visualization
+# Designed for maximum distinguishability and academic publication
 LAND_COVER_CLASSES = {
-    0: {"name": "Water", "color": "#0077be", "rgb": (0, 119, 190)},
-    1: {"name": "Vegetation", "color": "#2d8532", "rgb": (45, 133, 50)},
-    2: {"name": "Bare Soil", "color": "#8b4513", "rgb": (139, 69, 19)},
-    3: {"name": "Urban", "color": "#d62728", "rgb": (214, 39, 40)},
-    4: {"name": "Bright Surfaces", "color": "#ffd700", "rgb": (255, 215, 0)},
-    5: {"name": "Shadows/Mixed", "color": "#666666", "rgb": (102, 102, 102)},
+    0: {"name": "Water", "color": "#1E90FF", "rgb": (30, 144, 255)},       # Dodger blue - clear water
+    1: {"name": "Vegetation", "color": "#228B22", "rgb": (34, 139, 34)},   # Forest green - natural vegetation
+    2: {"name": "Bare Soil", "color": "#CD853F", "rgb": (205, 133, 63)},   # Peru - exposed earth
+    3: {"name": "Urban", "color": "#DC143C", "rgb": (220, 20, 60)},        # Crimson - built-up (high contrast)
+    4: {"name": "Bright Surfaces", "color": "#FFD700", "rgb": (255, 215, 0)},  # Gold - high reflectance
+    5: {"name": "Shadows/Mixed", "color": "#4B0082", "rgb": (75, 0, 130)}, # Indigo - uncertain/shadow
 }
 
 
@@ -187,6 +188,169 @@ def export_colored_geotiff(
         dst.set_band_description(3, 'Blue')
     
     return output_path
+
+
+def export_rgb(
+    city: str,
+    output_path: Optional[Union[str, Path]] = None,
+    *,
+    bands_dir: Optional[Path] = None,
+    project_root: Optional[Path] = None,
+    stretch_percentile: int = 2,
+    include_fcc: bool = True,
+    include_ndvi: bool = True,
+    dpi: int = 300,
+) -> Dict[str, Path]:
+    """Export RGB True Color and other band composites from satellite data.
+    
+    Creates publication-quality images from the original satellite bands:
+    - RGB True Color (B04, B03, B02)
+    - False Color Composite (B08, B04, B03) - highlights vegetation
+    - NDVI visualization
+    
+    Args:
+        city: City name
+        output_path: Base output path (without extension). If None, uses city data dir
+        bands_dir: Directory with band files. If None, auto-detected
+        project_root: Project root override
+        stretch_percentile: Percentile for histogram stretch (default: 2%)
+        include_fcc: Include False Color Composite
+        include_ndvi: Include NDVI visualization
+        dpi: Output resolution (default: 300 for publication)
+        
+    Returns:
+        Dictionary with paths to created files
+        
+    Example:
+        >>> paths = export_rgb("Milan")
+        >>> print(paths["rgb"])  # Path to RGB image
+        >>> print(paths["fcc"])  # Path to FCC image
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    import rasterio
+    
+    # Find project root
+    if project_root is None:
+        from satellite_analysis.utils.project_paths import ProjectPaths
+        paths = ProjectPaths()
+        project_root = paths.project_root
+    
+    # Find bands directory
+    if bands_dir is None:
+        bands_dir = project_root / "data" / "cities" / city.lower() / "bands"
+    bands_dir = Path(bands_dir)
+    
+    if not bands_dir.exists():
+        raise FileNotFoundError(f"Bands directory not found: {bands_dir}")
+    
+    # Determine output directory
+    if output_path is None:
+        output_dir = bands_dir.parent / "exports"
+    else:
+        output_dir = Path(output_path).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base_name = city.lower()
+    
+    # Load bands
+    def load_band(band_name: str) -> np.ndarray:
+        for ext in [".jp2", ".tif", ".TIF"]:
+            path = bands_dir / f"{band_name}{ext}"
+            if path.exists():
+                with rasterio.open(path) as src:
+                    return src.read(1).astype(np.float32)
+        raise FileNotFoundError(f"Band {band_name} not found in {bands_dir}")
+    
+    # Histogram stretch function
+    def stretch(arr: np.ndarray, percentile: int = 2) -> np.ndarray:
+        p_low = np.nanpercentile(arr, percentile)
+        p_high = np.nanpercentile(arr, 100 - percentile)
+        stretched = np.clip((arr - p_low) / (p_high - p_low + 1e-6), 0, 1)
+        return (stretched * 255).astype(np.uint8)
+    
+    outputs = {}
+    
+    # Load RGB bands (B04=Red, B03=Green, B02=Blue)
+    b04 = load_band("B04")  # Red
+    b03 = load_band("B03")  # Green
+    b02 = load_band("B02")  # Blue
+    
+    # Create RGB True Color
+    rgb = np.stack([stretch(b04), stretch(b03), stretch(b02)], axis=-1)
+    
+    rgb_path = output_dir / f"{base_name}_rgb.png"
+    plt.figure(figsize=(12, 12), dpi=dpi)
+    plt.imshow(rgb)
+    plt.title(f"{city} - RGB True Color (Sentinel-2)", fontsize=14, fontweight='bold')
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(rgb_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.close()
+    outputs["rgb"] = rgb_path
+    
+    # Also save as high-res GeoTIFF if possible
+    try:
+        rgb_tif_path = output_dir / f"{base_name}_rgb.tif"
+        # Get transform from one of the bands
+        with rasterio.open(bands_dir / "B04.jp2") as src:
+            transform = src.transform
+            crs = src.crs
+        
+        with rasterio.open(
+            rgb_tif_path, 'w', driver='GTiff',
+            height=rgb.shape[0], width=rgb.shape[1], count=3,
+            dtype='uint8', crs=crs, transform=transform, compress='lzw'
+        ) as dst:
+            for i in range(3):
+                dst.write(rgb[:, :, i], i + 1)
+        outputs["rgb_geotiff"] = rgb_tif_path
+    except Exception:
+        pass  # Skip GeoTIFF if bands don't have georef info
+    
+    # False Color Composite (vegetation emphasis)
+    if include_fcc:
+        try:
+            b08 = load_band("B08")  # NIR
+            fcc = np.stack([stretch(b08), stretch(b04), stretch(b03)], axis=-1)
+            
+            fcc_path = output_dir / f"{base_name}_fcc.png"
+            plt.figure(figsize=(12, 12), dpi=dpi)
+            plt.imshow(fcc)
+            plt.title(f"{city} - False Color Composite (NIR-R-G)", fontsize=14, fontweight='bold')
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(fcc_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+            plt.close()
+            outputs["fcc"] = fcc_path
+        except FileNotFoundError:
+            pass
+    
+    # NDVI visualization
+    if include_ndvi:
+        try:
+            b08 = load_band("B08")  # NIR
+            eps = 1e-6
+            ndvi = (b08 - b04) / (b08 + b04 + eps)
+            
+            # NDVI colormap: brown → yellow → green
+            colors = ['#8B4513', '#CD853F', '#F4A460', '#FFFFE0', '#90EE90', '#228B22', '#006400']
+            cmap = LinearSegmentedColormap.from_list('ndvi', colors, N=256)
+            
+            ndvi_path = output_dir / f"{base_name}_ndvi.png"
+            fig, ax = plt.subplots(figsize=(12, 12), dpi=dpi)
+            im = ax.imshow(ndvi, cmap=cmap, vmin=-0.5, vmax=0.9)
+            ax.set_title(f"{city} - NDVI (Vegetation Index)", fontsize=14, fontweight='bold')
+            ax.axis('off')
+            cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label('NDVI', fontsize=12)
+            plt.tight_layout()
+            plt.savefig(ndvi_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+            plt.close()
+            outputs["ndvi"] = ndvi_path
+        except FileNotFoundError:
+            pass
+    
+    return outputs
 
 
 def export_report(

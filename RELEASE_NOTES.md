@@ -1,122 +1,119 @@
-# Release Notes v2.3.0 🚀
-
-**Release Date**: December 30, 2025
+# Release Notes v2.3.0
 
 ## 🎯 Highlights
 
-This release focuses on **visualization quality** and **data quality control** with raw cluster preservation, publication-ready RGB exports, and manual product selection workflow.
+**Raw Clusters Mode** is the marquee feature of this release, solving the cluster collapse bug that plagued KMeans visualizations. Now you can preserve distinct cluster IDs without semantic mapping.
 
----
+**RGB Export Suite** brings publication-quality visualization tools (300 DPI) with three modes: True Color, False Color Composite (NIR-R-G), and NDVI heatmaps - all georeferenced for GIS integration.
 
-## ✨ What's New
+## ✨ New Features
 
-### Raw Clusters Mode
-- **`raw_clusters=True`** preserves distinct cluster IDs (0 to N-1) without semantic mapping
-- Essential for KMeans visualization where 6 clusters shouldn't collapse to semantic classes
-- Fixes cluster collapse bug in previous versions
+### `raw_clusters=True` Parameter
+Keep distinct cluster IDs (0 to N-1) without semantic mapping. Essential for KMeans where 6 clusters shouldn't collapse to 3 semantic classes.
 
 ```python
-result = analyze("Milan", raw_clusters=True)  # Keep all 6 distinct clusters
+result = analyze("Milan", raw_clusters=True)  # Preserves all 6 KMeans clusters
 ```
 
-### RGB Export Functions
-- **`export_rgb()`**: Generate publication-quality visualizations at 300 DPI
-  - True Color (R-G-B)
-  - False Color Composite (NIR-R-G)
-  - NDVI vegetation index
-- **RGB GeoTIFF export**: Georeferenced True Color for GIS integration
+### `export_rgb()` Function
+Generate publication-quality RGB visualizations at 300 DPI:
 
 ```python
-export_rgb(result, "Milan", output_dir="exports/")
+from satellite_analysis import export_rgb
+
+# True Color RGB (like a natural photo)
+export_rgb(result, mode="true_color", output_path="true_color.png")
+
+# False Color Composite (NIR-R-G, vegetation in red)
+export_rgb(result, mode="false_color", output_path="false_color.png")
+
+# NDVI heatmap (vegetation health)
+export_rgb(result, mode="ndvi", output_path="ndvi.png")
 ```
+
+### RGB GeoTIFF Export
+Georeferenced RGB True Color for GIS integration:
+
+```python
+from satellite_analysis import export_geotiff
+
+export_geotiff(result, output_path="milan_rgb.tif", rgb=True)
+```
+
+## 🔧 Improvements
+
+### Enhanced Color Palette
+High-contrast colors for better visualization:
+- Urban: Gray → **Crimson** (#DC143C) for better visibility
+- All classes now use distinct, vibrant colors
 
 ### Manual Product Selection
-- **Improved notebook workflow** (Cells 4-5): explicit product selection for better data quality control
-- Users can now review cloud cover, acquisition date, and other metadata before downloading
-- `auto_download=False` by default in notebook
+Notebook workflow now requires explicit product selection (Cells 4-5) for better data quality control:
+1. Cell 4: Search available products
+2. Cell 5: Select `SELECTED_PRODUCT_INDEX` → download
+3. Cell 6: Preview RGB (optional)
+4. Cell 7: `analyze()` with `auto_download=False`
 
-### Visual Improvements
-- **High-contrast color palette** for better visualization
-- Urban class changed from gray to crimson (#DC143C)
-- Auto-detection of raw vs semantic mode with distinct color schemes
-
----
-
-## 🔧 Configuration
-
-New notebook parameters:
-```python
-RAW_CLUSTERS = False  # Set to True for distinct cluster visualization
-SELECTED_PRODUCT_INDEX = 0  # Index of product to download from search results
-```
-
----
-
-## 📦 Installation
-
-```bash
-git clone https://github.com/VTvito/sentinel2-land-cover.git
-cd sentinel2-land-cover
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e ".[notebooks]"
-```
-
----
-
-## 🔗 Quick Links
-
-- **Notebook**: [notebooks/city_analysis.ipynb](notebooks/city_analysis.ipynb)
-- **Documentation**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Changelog**: [CHANGELOG.md](CHANGELOG.md)
-
----
+### Configuration Cell Update
+Notebook configuration cell now includes `RAW_CLUSTERS` parameter for toggling between semantic and raw modes.
 
 ## 🐛 Bug Fixes
 
-- Fixed KMeans cluster collapse issue where 6 clusters would map to 3 semantic classes
-- Improved path resolution consistency
+### KMeans Cluster Collapse Fixed
+Fixed issue where 6 KMeans clusters would collapse to 3 semantic classes due to NDVI/NDWI threshold mapping. Use `raw_clusters=True` to preserve all clusters and see the full clustering output.
 
----
+**Before:** 6 clusters → 3 semantic classes (data loss)  
+**After:** 6 clusters → 6 distinct visualizations with `raw_clusters=True`
 
-## 💡 API Examples
+## 📊 Workflow Changes
+
+- **Auto-download disabled by default**: Users must explicitly select products via Cell 5 for better data quality control
+- **Visualization auto-detection**: Notebook visualization cell automatically detects mode and uses appropriate color palettes
+
+## 🔄 Migration Guide
+
+### From v2.2.0
+
+No breaking changes. All existing code continues to work:
 
 ```python
-from satellite_analysis import analyze, export_rgb, export_geotiff
+# Still works exactly as before
+result = analyze("Milan")  # Uses semantic mapping (default)
 
-# Basic analysis
-result = analyze("Florence")
-
-# Raw clusters (for KMeans visualization)
-result = analyze("Milan", raw_clusters=True)
-
-# Export visualizations
-export_rgb(result, "Milan", output_dir="exports/")
-export_geotiff(result, "Milan", output_dir="exports/")
+# New option for raw clustering
+result = analyze("Milan", raw_clusters=True)  # Keeps distinct cluster IDs
 ```
 
+### Notebook Users
+
+Update your notebook configuration cell to include:
+
+```python
+RAW_CLUSTERS = False  # or True for raw mode
+```
+
+And update Cell 7 to use `auto_download=False`:
+
+```python
+result = analyze(
+    CITY_NAME,
+    auto_download=False,  # Must select products manually in Cell 5
+    raw_clusters=RAW_CLUSTERS
+)
+```
+
+## 📚 Documentation
+
+- Updated notebook with new workflow (manual product selection)
+- Enhanced API documentation for `raw_clusters` parameter
+- New examples for RGB export functions
+
+## 🙏 Acknowledgments
+
+Thanks to all users who reported the cluster collapse issue and helped test the new `raw_clusters` mode!
+
 ---
 
-## 🔄 Upgrade Notes
-
-- **Breaking change**: Notebook now requires manual product selection (Cell 5)
-- `auto_download` parameter defaults to `False` in notebook workflow
-- Update existing notebooks to include `SELECTED_PRODUCT_INDEX` configuration
-
----
-
-## 📊 Statistics
-
-- **Test Coverage**: 85 tests (71 unit + 14 integration)
-- **Python Support**: 3.10, 3.11, 3.12, 3.13
-- **Land Cover Classes**: 6 semantic classes (Water, Vegetation, Bare Soil, Urban, Bright Surfaces, Shadows/Mixed)
-
----
-
-## 🙏 Contributors
-
-Thanks to all contributors and users for feedback and suggestions!
-
----
-
-**Full Changelog**: [CHANGELOG.md](CHANGELOG.md)
+**Full Changelog**: [CHANGELOG.md](CHANGELOG.md)  
+**Issues Fixed**: Cluster collapse bug in KMeans visualization  
+**Download**: See [Releases](https://github.com/yourusername/satellite_git/releases/tag/v2.3.0)

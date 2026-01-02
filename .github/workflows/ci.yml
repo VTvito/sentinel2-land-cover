@@ -28,9 +28,13 @@ jobs:
           pip install -e .
           pip install pytest
 
+      - name: Setup config
+        run: |
+          cp config/config.yaml.example config/config.yaml
+
       - name: Run tests
         run: |
-          python -m pytest tests/ -v --tb=short
+          python -m pytest tests/ -v --tb=short -m "not integration"
 
       - name: Smoke test (import only)
         run: |

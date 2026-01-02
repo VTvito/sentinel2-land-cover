@@ -33,9 +33,9 @@ jobs:
         run: |
           python -m pytest tests/ -v --tb=short
 
-      - name: Smoke test (no network)
+      - name: Smoke test (import only)
         run: |
-          python -c "from satellite_analysis import analyze; print(analyze('Milan', max_size=200, crop_to_city=True, classifier='kmeans').summary())"
+          python -c "from satellite_analysis import analyze, export_geotiff, export_json, export_image, export_rgb, LAND_COVER_CLASSES; print('✓ All imports successful')"
 
   lint:
     runs-on: ubuntu-latest

@@ -272,7 +272,6 @@ class CompletePipeline:
         possible_paths = [
             self._resolve_path("data", "cities", city.lower(), "bands"),
             self._resolve_path("data", "processed", f"{city.lower()}_centro"),
-            self._resolve_path("data", "demo", f"{city.lower()}_sample", "bands"),
         ]
         
         for path in possible_paths:

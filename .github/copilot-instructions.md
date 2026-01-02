@@ -24,7 +24,17 @@ path = Path("data/cities/milan")
 
 ## Classes
 
-`{0:Water, 1:Vegetation, 2:Bare Soil, 3:Urban, 4:Bright Surfaces, 5:Shadows/Mixed}`
+Semantic: `{0:Water, 1:Vegetation, 2:Bare Soil, 3:Urban, 4:Bright Surfaces, 5:Shadows/Mixed}`
+
+Raw mode: `raw_clusters=True` keeps distinct IDs (0 to N-1) without semantic mapping
+
+## Notebook workflow (v2.3+)
+
+**Manual only** (no auto-download):
+1. Cell 4: Search products
+2. Cell 5: Select `SELECTED_PRODUCT_INDEX` → download
+3. Cell 6: Preview RGB (optional)
+4. Cell 7: `analyze()` with `auto_download=False`
 
 ## Adding features
 

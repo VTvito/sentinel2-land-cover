@@ -10,7 +10,7 @@ import numpy as np
 # Type aliases
 ClassifierType = Literal["kmeans", "spectral", "consensus"]
 BandFormat = Literal["tif", "jp2"]
-DataSource = Literal["local", "demo", "downloaded"]
+DataSource = Literal["local", "downloaded"]
 
 
 @dataclass

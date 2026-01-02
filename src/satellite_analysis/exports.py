@@ -254,11 +254,21 @@ def export_rgb(
     
     # Load bands
     def load_band(band_name: str) -> np.ndarray:
+        # Try direct files first
         for ext in [".jp2", ".tif", ".TIF"]:
             path = bands_dir / f"{band_name}{ext}"
             if path.exists():
                 with rasterio.open(path) as src:
                     return src.read(1).astype(np.float32)
+        
+        # Try recursive search (files might be in subdirectories like .SAFE)
+        for ext in [".jp2", ".tif", ".TIF"]:
+            matches = list(bands_dir.rglob(f"**/{band_name}{ext}"))
+            if matches:
+                path = matches[0]  # Use first match
+                with rasterio.open(path) as src:
+                    return src.read(1).astype(np.float32)
+        
         raise FileNotFoundError(f"Band {band_name} not found in {bands_dir}")
     
     # Histogram stretch function

@@ -6,10 +6,12 @@
 - **`raw_clusters` mode**: Keep distinct cluster IDs (0 to N-1) without semantic mapping. Essential for KMeans visualization where clusters shouldn't collapse to semantic classes.
 - **`export_rgb()` function**: Generate publication-quality RGB True Color, False Color Composite (NIR-R-G), and NDVI visualizations at 300 DPI.
 - **RGB GeoTIFF export**: Georeferenced RGB True Color for GIS integration.
+- **Manual product selection**: Notebook workflow now requires explicit product selection (Cells 4-5) for better data quality control.
 
 ### Changed
 - **Improved color palette**: High-contrast colors for better visualization. Urban changed from gray (#808080) to crimson (#DC143C).
 - **Notebook updated**: Configuration cell now includes `RAW_CLUSTERS` parameter; visualization cell auto-detects mode and uses distinct palettes.
+- **Auto-download disabled**: `auto_download=False` by default in notebook workflow. Users must explicitly select products via Cell 5.
 
 ### Fixed
 - **KMeans cluster collapse bug**: Fixed issue where 6 clusters would collapse to 3 semantic classes due to NDVI/NDWI threshold mapping. Use `raw_clusters=True` to preserve all clusters.

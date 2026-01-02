@@ -5,47 +5,31 @@ labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: "Thanks for reporting! Please keep it concise and include the essentials."
+      value: "Keep it concise: what you did, what happened, what you expected."
   - type: textarea
-    id: what
+    id: description
     attributes:
-      label: What happened?
-      description: What did you do, and what did you expect?
-      placeholder: "I ran the notebook Cell 5 with CITY=... and got ..."
+      label: Description
+      description: What happened? Include steps to reproduce.
+      placeholder: |
+        I ran notebook Cell 7 with CITY="Milan" and got:
+        ```
+        Error: ...
+        ```
+        
+        Expected: ...
     validations:
       required: true
   - type: textarea
-    id: repro
+    id: environment
     attributes:
-      label: Steps to reproduce
-      placeholder: |
-        1. ...
-        2. ...
-        3. ...
+      label: Environment
+      description: Version, OS, Python version
+      placeholder: "v2.3.0, Windows 11, Python 3.12"
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Logs / traceback
+      label: Logs / traceback (if applicable)
       render: shell
-  - type: input
-    id: version
-    attributes:
-      label: Version / commit
-      placeholder: "v2.1.0 or commit sha"
-  - type: dropdown
-    id: entrypoint
-    attributes:
-      label: Entry point
-      options:
-        - Notebook (notebooks/city_analysis.ipynb)
-        - Python API (analyze)
-        - CLI (scripts/analyze_city.py)
-        - API server (scripts/api_server.py)
-  - type: textarea
-    id: env
-    attributes:
-      label: Environment
-      description: OS, Python version, install method
-      placeholder: "Windows 11, Python 3.12, pip install -e ."

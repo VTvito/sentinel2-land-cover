@@ -41,6 +41,8 @@ pip install -e ".[notebooks]"   # or [api] for REST server
 ## Quick Start
 
 **Notebook** → [notebooks/city_analysis.ipynb](notebooks/city_analysis.ipynb)
+- **Manual workflow**: Search products → select by index → preview → analyze
+- Full control over data quality (cloud cover, acquisition date)
 
 **Python**
 ```python
@@ -77,13 +79,17 @@ sentinel:
 | Auth fails | Check `config/config.yaml` |
 | No products | Widen dates / raise cloud cover |
 | Slow | `max_size=1000`, `classifier="kmeans"` |
-| Disk | Delete `data/cities/*/previews/` |
+| Disk full | Delete old runs: `data/cities/*/runs/`, clear cache: `data/previews/`, `data/raw/` |
 
 ---
 
 ## Output
 
-`data/cities/{city}/runs/{timestamp}/` → `labels.npy`, `confidence.npy`, `run_info.json`, plus exports (`*.tif`, `*.html`, `*.png`).
+**Analysis results**: `data/cities/{city}/runs/{timestamp}/` → `labels.npy`, `confidence.npy`, `run_info.json`, plus exports (`*.tif`, `*.html`, `*.png`).
+
+**Temporary cache** (safe to delete):
+- `data/previews/` → RGB previews from notebook Cell 6
+- `data/raw/` → Downloaded Sentinel-2 ZIP files (extracted to `bands/`)
 
 ---
 
@@ -92,6 +98,14 @@ sentinel:
 `analyze`, `analyze_batch`, `quick_preview`, `compare`, `export_geotiff`, `export_rgb`, `export_report`, `export_image`, `export_json`, `LAND_COVER_CLASSES`
 
 **New in v2.3**: `raw_clusters=True` keeps distinct cluster IDs, `export_rgb()` for publication-quality images.
+
+---
+
+## Roadmap
+
+- [ ] **Temporal comparison** – Change detection between two time periods
+- [ ] **Multi-city batch** – Process multiple cities in parallel
+- [ ] **Custom classifiers** – Plugin system for ML models
 
 ---
 

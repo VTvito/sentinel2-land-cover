@@ -40,7 +40,7 @@ import uvicorn
 # Import satellite analysis
 from satellite_analysis import (
     analyze, analyze_batch, compare,
-    export_geotiff, export_report, export_json,
+    export_geotiff, export_report, export_json, export_rgb,
     LAND_COVER_CLASSES,
 )
 
@@ -53,7 +53,9 @@ class AnalyzeRequest(BaseModel):
     city: str = Field(..., description="City name (e.g., Florence, Milan)")
     max_size: Optional[int] = Field(2000, description="Max image dimension")
     classifier: Optional[str] = Field("consensus", description="Classification method")
-    exports: Optional[List[str]] = Field(None, description="Export formats: geotiff, report, json")
+    n_clusters: Optional[int] = Field(6, description="Number of clusters for kmeans")
+    raw_clusters: Optional[bool] = Field(False, description="Keep raw cluster IDs (no semantic mapping)")
+    exports: Optional[List[str]] = Field(None, description="Export formats: geotiff, report, json, rgb")
     language: Optional[str] = Field("en", description="Report language: en, it")
 
 class BatchRequest(BaseModel):
@@ -61,6 +63,8 @@ class BatchRequest(BaseModel):
     cities: List[str] = Field(..., description="List of city names")
     max_size: Optional[int] = Field(2000, description="Max image dimension")
     classifier: Optional[str] = Field("consensus", description="Classification method")
+    n_clusters: Optional[int] = Field(6, description="Number of clusters for kmeans")
+    raw_clusters: Optional[bool] = Field(False, description="Keep raw cluster IDs (no semantic mapping)")
 
 class CompareRequest(BaseModel):
     """Request model for change detection."""
@@ -124,7 +128,7 @@ response = requests.post("http://localhost:8000/analyze", json={
 print(response.json())
 ```
     """,
-    version="2.1.0",
+    version="2.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -179,7 +183,6 @@ async def health_check():
 async def list_cities():
     """List available cities with data."""
     data_dir = PROJECT_ROOT / "data" / "cities"
-    demo_dir = PROJECT_ROOT / "data" / "demo"
     
     cities = []
     
@@ -191,21 +194,8 @@ async def list_cities():
                     "name": d.name.title(),
                     "key": d.name,
                     "has_data": True,
-                    "source": "cities"
+                    "source": "local"
                 })
-    
-    # Check demo directory
-    if demo_dir.exists():
-        for d in demo_dir.iterdir():
-            if d.is_dir() and "sample" in d.name:
-                city_name = d.name.replace("_sample", "").title()
-                if city_name.lower() not in [c["key"] for c in cities]:
-                    cities.append({
-                        "name": city_name,
-                        "key": d.name,
-                        "has_data": True,
-                        "source": "demo"
-                    })
     
     return {
         "cities": cities,
@@ -229,6 +219,8 @@ async def analyze_city(request: AnalyzeRequest):
             request.city,
             max_size=request.max_size,
             classifier=request.classifier,
+            n_clusters=request.n_clusters,
+            raw_clusters=request.raw_clusters,
             project_root=PROJECT_ROOT,
         )
         
@@ -244,6 +236,9 @@ async def analyze_city(request: AnalyzeRequest):
             if "json" in request.exports:
                 path = export_json(result)
                 exports_result["json"] = str(path)
+            if "rgb" in request.exports:
+                path = export_rgb(result, dpi=100, include_ndvi=False)
+                exports_result["rgb"] = str(path)
         
         # Build response
         return AnalysisResponse(
@@ -291,7 +286,9 @@ async def analyze_cities_batch(request: BatchRequest, background_tasks: Backgrou
         job_id,
         request.cities,
         request.max_size,
-        request.classifier
+        request.classifier,
+        request.n_clusters,
+        request.raw_clusters
     )
     
     return {
@@ -364,6 +361,7 @@ async def download_file(file_type: str, city: str):
         "geotiff": (f"{city.lower()}_classification.tif", "image/tiff"),
         "report": (f"{city.lower()}_report.html", "text/html"),
         "json": (f"{city.lower()}_results.json", "application/json"),
+        "rgb": (f"{city.lower()}_composites_overview.png", "image/png"),
     }
     
     if file_type not in file_map:
@@ -390,7 +388,9 @@ async def run_batch_job(
     job_id: str,
     cities: List[str],
     max_size: int,
-    classifier: str
+    classifier: str,
+    n_clusters: int = 6,
+    raw_clusters: bool = False
 ):
     """Run batch analysis in background."""
     jobs[job_id].status = "running"
@@ -405,6 +405,8 @@ async def run_batch_job(
                     city,
                     max_size=max_size,
                     classifier=classifier,
+                    n_clusters=n_clusters,
+                    raw_clusters=raw_clusters,
                     project_root=PROJECT_ROOT,
                 )
                 results[city] = {
